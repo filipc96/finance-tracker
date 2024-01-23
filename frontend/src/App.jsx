@@ -13,6 +13,7 @@ import {
   faGroupArrowsRotate,
   faChartBar,
   faHistory,
+  faGear,
 } from "@fortawesome/free-solid-svg-icons";
 import Settings from "./components/Settings";
 
@@ -38,7 +39,7 @@ const menuItems = [
   },
   {
     name: "Settings",
-    icon: faEnvelope,
+    icon: faCalendar,
     link: "/settings",
     element: <Settings />,
   },
