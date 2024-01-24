@@ -14,6 +14,7 @@ import {
   faChartBar,
   faHistory,
   faGear,
+  faCalendar,
 } from "@fortawesome/free-solid-svg-icons";
 import Settings from "./components/Settings";
 
@@ -78,9 +79,3 @@ function App() {
 }
 
 export default App;
-
-{
-  /* <Route index element={<Dashboard />} />
-            <Route path="/myaccount" element={<MyAccoount />} />
-            <Route path="/categories" element={<Categories />} /> */
-}
