@@ -7,13 +7,11 @@ import Analytics from "./components/Analytics";
 import History from "./components/History";
 
 import {
-  faEnvelope,
   faGauge,
   faAddressBook,
   faGroupArrowsRotate,
   faChartBar,
   faHistory,
-  faGear,
   faCalendar,
 } from "@fortawesome/free-solid-svg-icons";
 import Settings from "./components/Settings";
