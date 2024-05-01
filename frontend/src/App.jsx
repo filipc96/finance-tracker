@@ -20,38 +20,38 @@ const menuItems = [
   {
     name: "Dashboard",
     icon: faGauge,
-    link: "/",
+    path: "/",
     index: true,
     element: <Dashboard />,
   },
   {
     name: "My Account",
     icon: faAddressBook,
-    link: "/myaccount",
+    path: "/myaccount",
     element: <MyAccount />,
   },
   {
     name: "Categories",
     icon: faGroupArrowsRotate,
-    link: "/categories",
+    path: "/categories",
     element: <Categories />,
   },
   {
     name: "Settings",
     icon: faCalendar,
-    link: "/settings",
+    path: "/settings",
     element: <Settings />,
   },
   {
     name: "Analytics",
     icon: faChartBar,
-    link: "/analytics",
+    path: "/analytics",
     element: <Analytics />,
   },
   {
     name: "History",
     icon: faHistory,
-    link: "/history",
+    path: "/history",
     element: <History />,
   },
 ];
@@ -66,7 +66,7 @@ function App() {
               item?.index ? (
                 <Route key={index} index element={item.element} />
               ) : (
-                <Route key={index} path={item.link} element={item.element} />
+                <Route key={index} path={item.path} element={item.element} />
               )
             )}
           </Route>
