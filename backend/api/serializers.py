@@ -18,6 +18,7 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ["id", "name"]
+        extra_kwargs = {"user": {"read_only": True}}
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -26,3 +27,4 @@ class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = ["id", "date", "amount", "description", "category"]
+        extra_kwargs = {"user": {"read_only": True}}
