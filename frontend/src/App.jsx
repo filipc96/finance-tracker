@@ -14,6 +14,7 @@ import {
   faChartBar,
   faHistory,
   faCalendar,
+  faSignOut,
 } from "@fortawesome/free-solid-svg-icons";
 import Settings from "./components/Settings";
 import Login from "./components/Login";
@@ -58,6 +59,12 @@ const menuItems = [
     path: "/history",
     element: <History />,
   },
+  {
+    name: "Log Out",
+    icon: faSignOut,
+    path: "/logout",
+    element: <Logout />,
+  },
 ];
 
 function Logout() {
@@ -94,9 +101,8 @@ function App() {
           </Route>
 
           <Route path="/login" element={<Login></Login>}></Route>
-          <Route path="/logout" element={<Logout></Logout>}></Route>
           <Route path="/register" element={<Register></Register>}></Route>
-          <Route path="/404" element={<NotFound></NotFound>}></Route>
+          <Route path="/notfound" element={<NotFound></NotFound>}></Route>
         </Routes>
       </BrowserRouter>
     </>
