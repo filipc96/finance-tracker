@@ -8,6 +8,7 @@ const Form = ({ route, method }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -24,6 +25,10 @@ const Form = ({ route, method }) => {
         navigate("/login");
       }
     } catch (error) {
+      if (error.response.status == 401) {
+        console.log("Wrong username or password!");
+        setErrorMsg(true);
+      }
       console.log(error);
     } finally {
       setLoading(false);
@@ -37,6 +42,7 @@ const Form = ({ route, method }) => {
           <span className="mb-3 text-4xl text-center font-bold">
             {method == "login" ? "Login" : "Register"}
           </span>
+
           <form onSubmit={handleSubmit}>
             <div className="py-4">
               <span className="mb-2 text-md">Username</span>
@@ -56,6 +62,14 @@ const Form = ({ route, method }) => {
                 value={password}
               />
             </div>
+            {errorMsg && method == "login" ? (
+              <span className="p-1 text-red-600">
+                Wrong username or password!
+              </span>
+            ) : (
+              ""
+            )}
+
             <div className="flex justify-between w-full py-4">
               <div className="mr-24">
                 <input type="checkbox" name="ch" id="ch" className="mr-2" />

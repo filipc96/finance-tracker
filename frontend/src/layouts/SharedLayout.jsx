@@ -1,5 +1,5 @@
 import { Outlet } from "react-router";
-import NavigationBar from "./NavigationBar";
+import NavigationBar from "../components/NavigationBar";
 
 const SharedLayout = ({ menuItems }) => {
   return (

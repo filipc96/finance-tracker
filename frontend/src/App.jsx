@@ -1,10 +1,10 @@
-import Dashboard from "./components/Dashboard";
+import Dashboard from "./pages/Dashboard";
 import { Route, Routes, BrowserRouter, Navigate } from "react-router-dom";
-import SharedLayout from "./components/SharedLayout";
-import MyAccount from "./components/MyAccount";
-import Categories from "./components/Categories";
-import Analytics from "./components/Analytics";
-import History from "./components/History";
+import SharedLayout from "./layouts/SharedLayout";
+import MyAccount from "./pages/MyAccount";
+import Categories from "./pages/Categories";
+import Analytics from "./pages/Analytics";
+import History from "./pages/History";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import {
@@ -16,10 +16,10 @@ import {
   faCalendar,
   faSignOut,
 } from "@fortawesome/free-solid-svg-icons";
-import Settings from "./components/Settings";
-import Login from "./components/Login";
-import Register from "./components/Register";
-import NotFound from "./components/NotFound";
+import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import NotFound from "./pages/NotFound";
 
 const menuItems = [
   {
@@ -74,7 +74,7 @@ function Logout() {
 
 function RegisterAndLogout() {
   localStorage.clear();
-  return <Navigate to="/login" />;
+  return <Register></Register>;
 }
 
 function App() {
@@ -101,7 +101,10 @@ function App() {
           </Route>
 
           <Route path="/login" element={<Login></Login>}></Route>
-          <Route path="/register" element={<Register></Register>}></Route>
+          <Route
+            path="/register"
+            element={<RegisterAndLogout></RegisterAndLogout>}
+          ></Route>
           <Route path="/notfound" element={<NotFound></NotFound>}></Route>
         </Routes>
       </BrowserRouter>
