@@ -1,24 +1,31 @@
+import { useEffect, useState } from "react";
 import Chart from "../components/Chart";
 import DashboardCard from "../components/DashboardCard";
+import api from "../api";
 
 const Dashboard = () => {
+  const [username, setUsername] = useState("");
+
+  useEffect(() => {
+    api
+      .get("/api/user/")
+      .then((response) => setUsername(response.data.username))
+      .catch((error) => console.error("Error fetching the username", error));
+  }, []);
+  // width and heigth from tailwind documentation
   return (
     <>
       <h2>Dashboard</h2>
 
       <div className="flex space-x-8 py-6">
         <DashboardCard
-          username="FIlip Cvijetinovic"
+          username={username}
           text="Your Expenses: 1000RSD"
-          width="400px"
-          height="150px"
         ></DashboardCard>
 
         <DashboardCard
-          username="FIlip Cvijetinovic"
+          username={username}
           text="Your Savings: 1000RSD"
-          width="400px"
-          height="150px"
         ></DashboardCard>
       </div>
 
@@ -30,17 +37,13 @@ const Dashboard = () => {
       </div>
       <div className="flex space-x-8 py-6">
         <DashboardCard
-          username="FIlip Cvijetinovic"
+          username={username}
           text="Sent 1000RSD to mother "
-          width="400px"
-          height="200px"
         ></DashboardCard>
 
         <DashboardCard
-          username="FIlip Cvijetinovic"
+          username={username}
           text="Broadband bill: 1000RSD"
-          width="400px"
-          heigth="200px"
         ></DashboardCard>
       </div>
     </>
