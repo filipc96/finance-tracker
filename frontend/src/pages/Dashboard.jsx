@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Chart from "../components/Chart";
 import DashboardCard from "../components/DashboardCard";
+import AddTransaction from "../components/AddTransaction";
 import api from "../api";
 
 const Dashboard = () => {
@@ -12,7 +13,6 @@ const Dashboard = () => {
       .then((response) => setUsername(response.data.username))
       .catch((error) => console.error("Error fetching the username", error));
   }, []);
-  // width and heigth from tailwind documentation
   return (
     <>
       <h2>Dashboard</h2>
@@ -34,6 +34,12 @@ const Dashboard = () => {
           Expenses Graph
           <Chart />
         </div>
+      </div>
+      <div className="flex space-x-8 py-6">
+        <AddTransaction type="expense"></AddTransaction>
+        <AddTransaction type="income"></AddTransaction>
+
+        {/* <AddCategory></AddCategory> */}
       </div>
       <div className="flex space-x-8 py-6">
         <DashboardCard
