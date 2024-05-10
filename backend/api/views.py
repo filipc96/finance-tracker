@@ -23,7 +23,7 @@ class GetUserView(APIView):
         return Response({"username": username})
 
 
-class TransactionListCreate(generics.ListAPIView):
+class TransactionListCreate(generics.ListCreateAPIView):
 
     serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated]
@@ -48,7 +48,7 @@ class TransactionDelete(generics.DestroyAPIView):
         return Transaction.objects.filter(user=user)
 
 
-class CategoryListCreate(generics.ListAPIView):
+class CategoryListCreate(generics.ListCreateAPIView):
 
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
