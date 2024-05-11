@@ -1,7 +1,7 @@
 import { useState } from "react";
 import api from "../api";
 
-const AddCategory = () => {
+const AddCategory = ({ callback }) => {
   const [categoryName, setCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState("");
 
@@ -13,6 +13,8 @@ const AddCategory = () => {
         .then((res) => {
           if (res.status === 201) console.log("Category created!");
           else console.log("Failed to create category!");
+
+          if (callback) callback();
         })
         .catch((error) => console.log(error));
     } else {
