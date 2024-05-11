@@ -1,8 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}', './src/**/*.html'],
+  content: [
+    "./index.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+    "./src/**/*.html",
+    "./node_modules/tailwind-datepicker-react/dist/**/*.js",
+  ],
   theme: {
     extend: {},
   },
   plugins: [],
-}
+};

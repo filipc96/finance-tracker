@@ -6,11 +6,15 @@ import api from "../api";
 
 const Dashboard = () => {
   const [username, setUsername] = useState("");
+  const [balance, setBalance] = useState(0);
 
   useEffect(() => {
     api
       .get("/api/user/")
-      .then((response) => setUsername(response.data.username))
+      .then((response) => {
+        setUsername(response.data.username);
+        setBalance(response.data.account.balance);
+      })
       .catch((error) => console.error("Error fetching the username", error));
   }, []);
   return (
@@ -25,7 +29,7 @@ const Dashboard = () => {
 
         <DashboardCard
           username={username}
-          text="Your Savings: 1000RSD"
+          text={`Balance: ${balance} RSD`}
         ></DashboardCard>
       </div>
 

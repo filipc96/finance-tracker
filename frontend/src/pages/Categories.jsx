@@ -22,9 +22,11 @@ const Categories = () => {
     <>
       <h2>Categories</h2>
 
-      <div className="flex flex-col space-y-8 py-6">
+      <div className="flex flex-col space-y-20 py-6 items-center justify-items-center">
         <AddCategory callback={getCategories}></AddCategory>
-        <CategoryTable categories={categories}></CategoryTable>
+        <div className="w-full">
+          <CategoryTable categories={categories}></CategoryTable>
+        </div>
       </div>
     </>
   );

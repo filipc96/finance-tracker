@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import api from "../api";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import DateInputBox from "./DateInputBox";
+import { format, parse } from "date-fns";
 
 const AddTransaction = ({ type }) => {
   const [categories, setCategories] = useState([]);
+  const [date, setDate] = useState(new Date());
 
   useEffect(() => {
     api
@@ -76,7 +81,25 @@ const AddTransaction = ({ type }) => {
             {getCategories}
           </select>
         </div>
+        <div className="sm:col-span-2">
+          <label
+            htmlFor="name"
+            className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+          >
+            Date{" "}
+          </label>
+          <DatePicker
+            selected={date}
+            onChange={(date) => {
+              let formatedDate = format(date, "yyyy-MM-dd");
+              setDate(formatedDate);
+              console.log(formatedDate);
+            }}
+            customInput={<DateInputBox></DateInputBox>}
+          />
+        </div>
       </div>
+
       <button className="w-full mt-5 bg-black text-white p-2 rounded-lg hover:bg-white hover:text-black hover:border hover:border-gray-300">
         Add {type === "expense" ? "Expense" : "Income"}
       </button>
