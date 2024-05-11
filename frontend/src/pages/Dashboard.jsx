@@ -8,15 +8,20 @@ const Dashboard = () => {
   const [username, setUsername] = useState("");
   const [balance, setBalance] = useState(0);
 
-  useEffect(() => {
+  const getData = () => {
     api
       .get("/api/user/")
       .then((response) => {
         setUsername(response.data.username);
-        setBalance(response.data.account.balance);
+        setBalance(response.data.balance);
       })
       .catch((error) => console.error("Error fetching the username", error));
+  };
+
+  useEffect(() => {
+    getData();
   }, []);
+
   return (
     <>
       <h2>Dashboard</h2>
@@ -40,8 +45,8 @@ const Dashboard = () => {
         </div>
       </div>
       <div className="flex space-x-8 py-6">
-        <AddTransaction type="expense"></AddTransaction>
-        <AddTransaction type="income"></AddTransaction>
+        <AddTransaction callback={getData} type="expense"></AddTransaction>
+        <AddTransaction callback={getData} type="income"></AddTransaction>
 
         {/* <AddCategory></AddCategory> */}
       </div>

@@ -20,7 +20,8 @@ class GetUserView(APIView):
 
     def get(self, request):
         username = request.user.username
-        return Response({"username": username})
+        balance = request.user.account.balance
+        return Response({"username": username, "balance": balance})
 
 
 class TransactionListCreate(generics.ListCreateAPIView):
