@@ -10,6 +10,9 @@ const CategoryTable = ({ categories }) => {
             <th scope="col" className="px-6 py-3">
               Type
             </th>
+            <th scope="col" className="px-6 py-3">
+              Transactions Sum
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -21,6 +24,17 @@ const CategoryTable = ({ categories }) => {
               >
                 <td className="px-6 py-4"> {category.name}</td>
                 <td className="px-6 py-4"> {category.type}</td>
+                {category.type === "expense" ? (
+                  <td className="px-6 py-4 text text-red-500">
+                    {" "}
+                    -{category.transactions_sum}
+                  </td>
+                ) : (
+                  <td className="px-6 py-4 text-green-500">
+                    {" "}
+                    +{category.transactions_sum}
+                  </td>
+                )}
               </tr>
             );
           })}

@@ -3,19 +3,32 @@ import Chart from "../components/Chart";
 import DashboardCard from "../components/DashboardCard";
 import AddTransaction from "../components/AddTransaction";
 import api from "../api";
+import { format } from "date-fns";
 
 const Dashboard = () => {
   const [username, setUsername] = useState("");
   const [balance, setBalance] = useState(0);
+  const [latestExpense, setLatestExpense] = useState({});
+  const [latestIncome, setLatestIncome] = useState({});
 
-  const getData = () => {
-    api
-      .get("/api/user/")
-      .then((response) => {
-        setUsername(response.data.username);
-        setBalance(response.data.balance);
-      })
-      .catch((error) => console.error("Error fetching the username", error));
+  const getData = async () => {
+    try {
+      const userData = await api.get("/api/user/");
+      setUsername(userData.data.username);
+      setBalance(userData.data.balance);
+
+      const latestExpenseData = await api.get(
+        "/api/transactions/expenses/latest"
+      );
+      setLatestExpense(latestExpenseData.data);
+
+      const latestIncomeData = await api.get(
+        "/api/transactions/incomes/latest"
+      );
+      setLatestIncome(latestIncomeData.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
   };
 
   useEffect(() => {
@@ -53,7 +66,9 @@ const Dashboard = () => {
       <div className="flex space-x-8 py-6">
         <DashboardCard
           username={username}
-          text="Sent 1000RSD to mother "
+          text={`${latestExpense.name} \nAmount: ${
+            latestExpense.amount
+          }\nDate: ${format(latestExpense.date, "MM/dd/yyyy")}`}
         ></DashboardCard>
 
         <DashboardCard

@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.contrib.auth.models import User
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import UserSerializer, TransactionSerializer, CategorySerializer
@@ -15,7 +15,31 @@ class CreateUserView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
 
-class GetUserView(APIView):
+class GetLatestExpense(APIView):
+    def get(self, request):
+        try:
+            latest_expense = Transaction.objects.filter(type="expense").latest(
+                "date_created"
+            )
+            serializer = TransactionSerializer(latest_expense)
+            return Response(serializer.data)
+        except Transaction.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class GetLatestIncome(APIView):
+    def get(self, request):
+        try:
+            latest_income = Transaction.objects.filter(type="income").latest(
+                "date_created"
+            )
+            serializer = TransactionSerializer(latest_income)
+            return Response(serializer.data)
+        except Transaction.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class GetUser(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
