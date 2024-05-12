@@ -20,9 +20,13 @@ class AccountsUserAdmin(AuthUserAdmin):
         return super(AccountsUserAdmin, self).change_view(*args, **kwargs)
 
 
+class CategoryAdmin(admin.ModelAdmin):
+    readonly_fields = ["id"]
+
+
 admin.site.unregister(User)
 admin.site.register(User, AccountsUserAdmin)
 
 # Register your models here.
 admin.site.register(Transaction)
-admin.site.register(Category)
+admin.site.register(Category, CategoryAdmin)

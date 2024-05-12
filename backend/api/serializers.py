@@ -15,7 +15,9 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CategorySerializer(serializers.ModelSerializer):
-    transactions_sum = serializers.DecimalField(max_digits=20, decimal_places=2)
+    transactions_sum = serializers.DecimalField(
+        required=False, max_digits=20, decimal_places=2
+    )
 
     class Meta:
         model = Category
@@ -24,7 +26,9 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(required=False, source="category.name")
+
     class Meta:
         model = Transaction
-        fields = ["id", "date", "amount", "name", "category", "type"]
+        fields = ["id", "date", "amount", "name", "category_name", "category", "type"]
         extra_kwargs = {"user": {"read_only": True}}

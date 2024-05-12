@@ -75,14 +75,24 @@ const Dashboard = () => {
       <div className="flex space-x-8 py-6">
         <DashboardCard
           username={username}
-          text={`${latestExpense.name} \nAmount: ${
-            latestExpense.amount
-          }\nDate: ${formatDate(latestExpense?.date)}`}
+          text={
+            latestExpense
+              ? `${latestExpense.name} \nAmount: ${
+                  latestExpense.amount
+                }\nDate: ${formatDate(latestExpense?.date)}`
+              : "No transactions yet"
+          }
         ></DashboardCard>
 
         <DashboardCard
           username={username}
-          text="Broadband bill: 1000RSD"
+          text={
+            latestIncome
+              ? `${latestIncome.name} \nAmount: ${
+                  latestIncome.amount
+                }\nDate: ${formatDate(latestIncome?.date)}`
+              : "No transactions yet"
+          }
         ></DashboardCard>
       </div>
     </>

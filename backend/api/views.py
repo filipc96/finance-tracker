@@ -24,7 +24,7 @@ class GetLatestExpense(APIView):
             serializer = TransactionSerializer(latest_expense)
             return Response(serializer.data)
         except Transaction.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            return Response(False)
 
 
 class GetLatestIncome(APIView):
@@ -36,7 +36,7 @@ class GetLatestIncome(APIView):
             serializer = TransactionSerializer(latest_income)
             return Response(serializer.data)
         except Transaction.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            return Response(False)
 
 
 class GetUser(APIView):
@@ -70,7 +70,7 @@ class TransactionDelete(generics.DestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Transaction.objects.filter(user=user)
+        return Transaction.objects.filter(user=user, id=self.kwargs["pk"])
 
 
 class CategoryListCreate(generics.ListCreateAPIView):
@@ -95,4 +95,4 @@ class CategoryDelete(generics.DestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Category.objects.filter(user=user)
+        return Category.objects.filter(user=user, id=self.kwargs["pk"])

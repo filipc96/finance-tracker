@@ -77,8 +77,10 @@ def update_balance_post_save(sender, instance, created, **kwargs):
 
 
 @receiver(post_delete, sender=Transaction)
-def update_balance_post_delete(sender, instance, created, **kwargs):
-    if created:
+def update_balance_post_delete(sender, instance, **kwargs):
+    account = Account.objects.get(user=instance.user)
+
+    if account:
         account = Account.objects.get(user=instance.user)
         if instance.category.type == "income":
             account.balance -= instance.amount

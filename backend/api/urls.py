@@ -18,8 +18,8 @@ urlpatterns = [
     ),
     path(
         "transactions/incomes/latest",
-        views.GetLatestExpense.as_view(),
-        name="latest-expense",
+        views.GetLatestIncome.as_view(),
+        name="latest-income",
     ),
     path("categories/", views.CategoryListCreate.as_view(), name="category-list"),
     path(

@@ -15,6 +15,17 @@ const Categories = () => {
       );
   };
 
+  const deleteCategory = (id) => {
+    api
+      .delete(`/api/categories/delete/${id}`)
+      .then((res) => {
+        if (res.status === 204) console.log("Note deleted!");
+        else console.log("Failed to delete note.");
+        getCategories();
+      })
+      .catch((error) => console.log(error));
+  };
+
   useEffect(() => {
     getCategories();
   }, []);
@@ -25,7 +36,10 @@ const Categories = () => {
       <div className="flex flex-col space-y-20 py-6 items-center justify-items-center">
         <AddCategory callback={getCategories}></AddCategory>
         <div className="w-full">
-          <CategoryTable categories={categories}></CategoryTable>
+          <CategoryTable
+            categories={categories}
+            onDelete={deleteCategory}
+          ></CategoryTable>
         </div>
       </div>
     </>
