@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 from .serializers import UserSerializer, TransactionSerializer, CategorySerializer
 from .models import Transaction, Category
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.db.models import Sum
+from django.db.models.functions import TruncMonth
 
 
 # Create your views here.
@@ -16,6 +18,8 @@ class CreateUserView(generics.CreateAPIView):
 
 
 class GetLatestExpense(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             latest_expense = Transaction.objects.filter(type="expense").latest(
@@ -28,6 +32,8 @@ class GetLatestExpense(APIView):
 
 
 class GetLatestIncome(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             latest_income = Transaction.objects.filter(type="income").latest(
@@ -96,3 +102,23 @@ class CategoryDelete(generics.DestroyAPIView):
     def get_queryset(self):
         user = self.request.user
         return Category.objects.filter(user=user, id=self.kwargs["pk"])
+
+
+class GetMonthlyTransactionSum(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, year):
+        filtered = Transaction.objects.filter(date__year=year)
+
+        monthly_sums = (
+            filtered.annotate(month=TruncMonth("date"))
+            .values("month")
+            .order_by("month")
+            .annotate(sum_of_transactions=Sum("amount"))
+        )
+        monthly = {i: 0 for i in range(1, 13)}
+
+        for m in monthly_sums:
+            month_number = m.get("month").month
+            monthly[month_number] = m.get("sum_of_transactions")
+        return Response(monthly)

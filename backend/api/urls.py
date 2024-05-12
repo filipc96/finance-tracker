@@ -27,4 +27,9 @@ urlpatterns = [
         views.CategoryDelete.as_view(),
         name="transaction-delete",
     ),
+    path(
+        "transactions/monthly-sum/<int:year>/",
+        views.GetMonthlyTransactionSum.as_view(),
+        name="monthly-transaction-sum",
+    ),
 ]

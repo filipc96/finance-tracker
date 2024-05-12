@@ -74,7 +74,7 @@ const Dashboard = () => {
       </div>
       <div className="flex space-x-8 py-6">
         <DashboardCard
-          username={username}
+          username="Latest Expense"
           text={
             latestExpense
               ? `${latestExpense.name} \nAmount: ${
@@ -85,7 +85,7 @@ const Dashboard = () => {
         ></DashboardCard>
 
         <DashboardCard
-          username={username}
+          username="Latest Income"
           text={
             latestIncome
               ? `${latestIncome.name} \nAmount: ${
