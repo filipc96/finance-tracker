@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [balance, setBalance] = useState(0);
   const [latestExpense, setLatestExpense] = useState({});
   const [latestIncome, setLatestIncome] = useState({});
+  const [allTimeSpent, setAllTimeSpent] = useState(0);
 
   const getData = async () => {
     try {
@@ -26,6 +27,11 @@ const Dashboard = () => {
         "/api/transactions/incomes/latest"
       );
       setLatestIncome(latestIncomeData.data);
+
+      const allTimeExpenseData = await api.get(
+        "/api/transactions/all-time-sum/expense/"
+      );
+      setAllTimeSpent(allTimeExpenseData.data);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -53,7 +59,7 @@ const Dashboard = () => {
       <div className="flex space-x-8 py-6">
         <DashboardCard
           username={username}
-          text="Your Expenses: 1000RSD"
+          text={`Total Spent: ${allTimeSpent}RSD`}
         ></DashboardCard>
 
         <DashboardCard
@@ -64,8 +70,7 @@ const Dashboard = () => {
 
       <div className="flex space-x-8 py-6 w-4/5">
         <div className="flex flex-col rounded-md border w-full p-8 justify-center">
-          Expenses Graph
-          <Chart />
+          <Chart type="expense" />
         </div>
       </div>
       <div className="flex space-x-8 py-6">

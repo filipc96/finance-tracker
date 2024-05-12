@@ -28,8 +28,18 @@ urlpatterns = [
         name="transaction-delete",
     ),
     path(
-        "transactions/monthly-sum/<int:year>/",
+        "transactions/monthly-sum/<str:transaction_type>/<int:year>/",
         views.GetMonthlyTransactionSum.as_view(),
         name="monthly-transaction-sum",
+    ),
+    path(
+        "transactions/yearly-sum/<str:transaction_type>/",
+        views.GetYearlyTransactionSum.as_view(),
+        name="yearly-transaction-sum",
+    ),
+    path(
+        "transactions/all-time-sum/<str:transaction_type>/",
+        views.GetAllTimeTransactionSum.as_view(),
+        name="all-time-sum",
     ),
 ]

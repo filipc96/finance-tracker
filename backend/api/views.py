@@ -7,7 +7,7 @@ from .serializers import UserSerializer, TransactionSerializer, CategorySerializ
 from .models import Transaction, Category
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, TruncYear
 
 
 # Create your views here.
@@ -105,10 +105,12 @@ class CategoryDelete(generics.DestroyAPIView):
 
 
 class GetMonthlyTransactionSum(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request, year):
-        filtered = Transaction.objects.filter(date__year=year)
+    def get(self, request, year, transaction_type):
+        filtered = Transaction.objects.filter(date__year=year).filter(
+            type=transaction_type
+        )
 
         monthly_sums = (
             filtered.annotate(month=TruncMonth("date"))
@@ -116,9 +118,40 @@ class GetMonthlyTransactionSum(APIView):
             .order_by("month")
             .annotate(sum_of_transactions=Sum("amount"))
         )
-        monthly = {i: 0 for i in range(1, 13)}
+        monthly = [0] * 12
 
         for m in monthly_sums:
             month_number = m.get("month").month
-            monthly[month_number] = m.get("sum_of_transactions")
+            monthly[month_number - 1] = m.get("sum_of_transactions")
         return Response(monthly)
+
+
+class GetYearlyTransactionSum(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, transaction_type):
+        filtered = Transaction.objects.filter(type=transaction_type)
+
+        yearly_sums = (
+            filtered.annotate(year=TruncYear("date"))
+            .values("year")
+            .order_by("year")
+            .annotate(sum_of_transactions=Sum("amount"))
+        )
+        print(yearly_sums)
+
+        yearly_sum_response = {}
+
+        for m in yearly_sums:
+            year = m.get("year").year
+            yearly_sum_response[year] = m.get("sum_of_transactions")
+        return Response(yearly_sum_response)
+
+
+class GetAllTimeTransactionSum(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, transaction_type):
+        filtered = Transaction.objects.filter(type=transaction_type)
+
+        return Response(filtered.aggregate(total_sum=Sum("amount"))["total_sum"])

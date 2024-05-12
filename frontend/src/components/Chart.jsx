@@ -22,11 +22,14 @@ ChartJS.register(
   Legend
 );
 
-const Chart = () => {
+const Chart = ({ type }) => {
   const [sums, setSums] = useState({});
+
   useEffect(() => {
+    const currentYear = new Date().getFullYear();
+
     api
-      .get("/api/transactions/monthly-sum/2024/")
+      .get(`/api/transactions/monthly-sum/${type}/${currentYear}/`)
       .then((res) => setSums(res.data))
       .catch((error) => console.log(error));
   }, []);
@@ -55,20 +58,29 @@ const Chart = () => {
     "Dec",
   ];
 
+  const color = `${
+    type === "expense" ? "rgb(255, 99, 132)" : "rgb(99, 255, 132)"
+  }`;
+
   const data = {
     labels,
     datasets: [
       {
-        label: "Expenses",
-        data: Array.from({ length: 12 }, (_, i) => sums[i + 1]),
-        borderColor: "rgb(255, 99, 132)",
-        backgroundColor: "rgba(255, 99, 132, 0.5)",
+        label: `${type === "expense" ? "Expenses" : "Incomes"}`,
+        data: sums,
+        borderColor: color,
+        backgroundColor: color,
       },
     ],
   };
   console.log(data);
 
-  return <Line options={options} data={data} />;
+  return (
+    <>
+      {type === "expense" ? "Expenses Graph" : "Incomes Graph"}
+      <Line options={options} data={data} />
+    </>
+  );
 };
 
 export default Chart;
