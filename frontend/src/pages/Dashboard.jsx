@@ -31,6 +31,17 @@ const Dashboard = () => {
     }
   };
 
+  const formatDate = (dateString) => {
+    const dateObject = new Date(dateString);
+    if (!isNaN(dateObject.getTime())) {
+      console.log(dateObject);
+      return format(dateObject, "MM/dd/yyyy");
+    } else {
+      console.error("Invalid date value:", dateString);
+      return "Invalid Date"; // or any fallback value
+    }
+  };
+
   useEffect(() => {
     getData();
   }, []);
@@ -60,15 +71,13 @@ const Dashboard = () => {
       <div className="flex space-x-8 py-6">
         <AddTransaction callback={getData} type="expense"></AddTransaction>
         <AddTransaction callback={getData} type="income"></AddTransaction>
-
-        {/* <AddCategory></AddCategory> */}
       </div>
       <div className="flex space-x-8 py-6">
         <DashboardCard
           username={username}
           text={`${latestExpense.name} \nAmount: ${
             latestExpense.amount
-          }\nDate: ${format(latestExpense.date, "MM/dd/yyyy")}`}
+          }\nDate: ${formatDate(latestExpense?.date)}`}
         ></DashboardCard>
 
         <DashboardCard

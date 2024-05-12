@@ -130,7 +130,7 @@ const AddTransaction = ({ type, callback }) => {
                 setDate(formatedDate);
                 console.log(formatedDate);
               }}
-              customInput={<DateInputBox></DateInputBox>}
+              customInput={<DateInputBox />}
             />
           </div>
         </div>
