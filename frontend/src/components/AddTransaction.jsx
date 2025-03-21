@@ -36,11 +36,12 @@ const AddTransaction = ({ type, callback }) => {
 
     if (date && name && amount && category) {
       console.log(name);
+      const formattedDate = format(date, "yyyy-MM-dd");
       api
         .post("/api/transactions/", {
           name: name,
           type: type,
-          date: date,
+          date: formattedDate,
           amount: amount,
           category: category,
         })

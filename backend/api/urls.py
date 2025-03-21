@@ -42,4 +42,9 @@ urlpatterns = [
         views.GetAllTimeTransactionSum.as_view(),
         name="all-time-sum",
     ),
+    path(
+        "transactions/expense-by-time/<str:time_period>/",
+        views.GetExpensesByTime.as_view(),
+        name="expense-by-time",
+    ),
 ]
