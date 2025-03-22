@@ -43,33 +43,35 @@ const PieChart = ({ type }) => {
         label: "Sums by Category",
         data: values,
         backgroundColor: [
-          "rgba(255, 99, 132, 0.6)",
-          "rgba(54, 162, 235, 0.6)",
-          "rgba(255, 206, 86, 0.6)",
-          "rgba(75, 192, 192, 0.6)",
-          "rgba(153, 102, 255, 0.6)",
-          "rgba(255, 159, 64, 0.6)",
+          "rgba(239, 68, 68, 0.8)", // red
+          "rgba(34, 197, 94, 0.8)", // green
+          "rgba(59, 130, 246, 0.8)", // blue
+          "rgba(168, 85, 247, 0.8)", // purple
+          "rgba(251, 146, 60, 0.8)", // orange
+          "rgba(236, 72, 153, 0.8)", // pink
         ],
-        borderColor: [
-          "rgba(255, 99, 132, 1)",
-          "rgba(54, 162, 235, 1)",
-          "rgba(255, 206, 86, 1)",
-          "rgba(75, 192, 192, 1)",
-          "rgba(153, 102, 255, 1)",
-          "rgba(255, 159, 64, 1)",
-        ],
-        borderWidth: 1,
+        borderColor: document.documentElement.classList.contains("dark")
+          ? "#1a1c23"
+          : "#ffffff",
+        borderWidth: 2,
       },
     ],
   };
+
   const options = {
     responsive: true,
     plugins: {
       legend: {
         position: "top",
+        labels: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
       },
     },
   };
+
   return (
     <>
       {type === "expense" ? "Expenses Pie Chart" : "Incomes Pie Chart"}

@@ -39,6 +39,37 @@ const Chart = ({ type }) => {
     plugins: {
       legend: {
         position: "top",
+        labels: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#374151"
+            : "#e5e7eb",
+        },
+        ticks: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
+      },
+      y: {
+        grid: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#374151"
+            : "#e5e7eb",
+        },
+        ticks: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
       },
     },
   };
@@ -58,9 +89,17 @@ const Chart = ({ type }) => {
     "Dec",
   ];
 
-  const color = `${
-    type === "expense" ? "rgb(255, 99, 132)" : "rgb(99, 255, 132)"
-  }`;
+  const darkModeBgColor =
+    type === "expense" ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.2)";
+
+  const color =
+    type === "expense"
+      ? document.documentElement.classList.contains("dark")
+        ? "rgb(239, 68, 68)"
+        : "rgb(255, 99, 132)"
+      : document.documentElement.classList.contains("dark")
+      ? "rgb(34, 197, 94)"
+      : "rgb(99, 255, 132)";
 
   const data = {
     labels,
@@ -69,11 +108,11 @@ const Chart = ({ type }) => {
         label: `${type === "expense" ? "Expenses" : "Incomes"}`,
         data: sums,
         borderColor: color,
-        backgroundColor: color,
+        backgroundColor: darkModeBgColor,
+        fill: true,
       },
     ],
   };
-  console.log(data);
 
   return (
     <>

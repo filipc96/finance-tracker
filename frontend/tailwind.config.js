@@ -6,8 +6,16 @@ export default {
     "./src/**/*.html",
     "./node_modules/tailwind-datepicker-react/dist/**/*.js",
   ],
+  darkMode: "class",
   theme: {
-    extend: {},
+    extend: {
+      backgroundColor: {
+        dark: {
+          DEFAULT: "var(--dark-bg)",
+          surface: "var(--dark-surface)",
+        },
+      },
+    },
   },
   plugins: [],
 };

@@ -79,13 +79,13 @@ const Graph = () => {
         const entry = data[type]?.find((item) => item.month === label);
         return entry ? entry.total : 0;
       }),
-      borderColor:
-        type === "expense" ? "rgb(255, 99, 132)" : "rgb(75, 192, 192)",
+      borderColor: type === "expense" ? "rgb(239, 68, 68)" : "rgb(34, 197, 94)",
       backgroundColor:
         type === "expense"
-          ? "rgba(255, 99, 132, 0.2)"
-          : "rgba(75, 192, 192, 0.2)",
+          ? "rgba(239, 68, 68, 0.2)"
+          : "rgba(34, 197, 94, 0.2)",
       tension: 0.4,
+      fill: true,
     })),
   };
 
@@ -94,11 +94,38 @@ const Graph = () => {
     plugins: {
       legend: {
         position: "top",
+        labels: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
       },
     },
     scales: {
       y: {
         beginAtZero: true,
+        grid: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#374151"
+            : "#e5e7eb",
+        },
+        ticks: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
+      },
+      x: {
+        grid: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#374151"
+            : "#e5e7eb",
+        },
+        ticks: {
+          color: document.documentElement.classList.contains("dark")
+            ? "#e2e8f0"
+            : "#000",
+        },
       },
     },
   };

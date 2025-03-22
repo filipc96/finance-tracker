@@ -11,7 +11,6 @@ from django.db.models.functions import TruncMonth, TruncYear
 from datetime import datetime, timedelta
 
 
-# Create your views here.
 class CreateUserView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -176,7 +175,7 @@ class GetTransactionsByTimespan(APIView):
             )
 
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=timespan * 30)  # Approximate month length
+        start_date = end_date - timedelta(days=timespan * 30)  
         transactions = Transaction.objects.filter(
             type=transaction_type, date__range=[start_date, end_date]
         )

@@ -20,6 +20,8 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { useEffect } from "react";
 
 const menuItems = [
   {
@@ -72,43 +74,71 @@ function Logout() {
   return <Navigate to="/login" />;
 }
 
-function RegisterAndLogout() {
-  localStorage.clear();
-  return <Register></Register>;
+function LoginWithCleanup() {
+  useEffect(() => {
+    document.documentElement.classList.remove("dark");
+    localStorage.removeItem("darkMode");
+    return () => {
+      const savedDarkMode = localStorage.getItem("darkMode");
+      if (savedDarkMode === "true") {
+        document.documentElement.classList.add("dark");
+      }
+    };
+  }, []);
+  return <Login />;
+}
+
+function RegisterWithCleanup() {
+  useEffect(() => {
+    document.documentElement.classList.remove("dark");
+    localStorage.removeItem("darkMode");
+    return () => {
+      const savedDarkMode = localStorage.getItem("darkMode");
+      if (savedDarkMode === "true") {
+        document.documentElement.classList.add("dark");
+      }
+    };
+  }, []);
+  return <Register />;
 }
 
 function App() {
   return (
-    <>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<SharedLayout menuItems={menuItems} />}>
-            {menuItems.map((item, index) =>
-              item?.index ? (
-                <Route
-                  key={index}
-                  index
-                  element={<ProtectedRoute>{item.element}</ProtectedRoute>}
-                />
-              ) : (
-                <Route
-                  key={index}
-                  path={item.path}
-                  element={<ProtectedRoute>{item.element}</ProtectedRoute>}
-                />
-              )
-            )}
-          </Route>
+    <BrowserRouter>
+      <Routes>
+        {/* Auth routes outside ThemeProvider */}
+        <Route path="/login" element={<LoginWithCleanup />} />
+        <Route path="/register" element={<RegisterWithCleanup />} />
 
-          <Route path="/login" element={<Login></Login>}></Route>
-          <Route
-            path="/register"
-            element={<RegisterAndLogout></RegisterAndLogout>}
-          ></Route>
-          <Route path="/notfound" element={<NotFound></NotFound>}></Route>
-        </Routes>
-      </BrowserRouter>
-    </>
+        {/* Protected routes inside ThemeProvider */}
+        <Route
+          path="/"
+          element={
+            <ThemeProvider>
+              <SharedLayout menuItems={menuItems} />
+            </ThemeProvider>
+          }
+        >
+          {menuItems.map((item, index) =>
+            item?.index ? (
+              <Route
+                key={index}
+                index
+                element={<ProtectedRoute>{item.element}</ProtectedRoute>}
+              />
+            ) : (
+              <Route
+                key={index}
+                path={item.path}
+                element={<ProtectedRoute>{item.element}</ProtectedRoute>}
+              />
+            )
+          )}
+        </Route>
+
+        <Route path="/notfound" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
