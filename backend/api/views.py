@@ -8,6 +8,7 @@ from .models import Transaction, Category
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth, TruncYear
+from datetime import datetime, timedelta
 
 
 # Create your views here.
@@ -156,45 +157,39 @@ class GetAllTimeTransactionSum(APIView):
 
         return Response(filtered.aggregate(total_sum=Sum("amount"))["total_sum"])
 
-
-class GetExpensesByTime(APIView):
+class GetTransactionsByTimespan(APIView):
     permission_classes = [AllowAny]
-
-    def get(self, request, time_period):
-        """
-        Retrieve expenses grouped by the specified time period (year or month).
-        :param time_period: 'year' or 'month'
-        """
-        if time_period not in ["year", "month"]:
+    
+    def get(self, request, timespan, transaction_type):
+        if timespan not in [6, 12, 24]:
             return Response(
-                {"error": "Invalid time period. Use 'year' or 'month'."},
+            {
+                "error": "Invalid timespan. Use 6, 12, or 24 (months)."},
                 status=400,
             )
 
-        # Filter expenses
-        expenses = Transaction.objects.filter(type="expense")
+        if transaction_type not in ["expense", "income"]:
+            return Response(
+            {
+                "error": "Invalid transaction type. Use 'expense' or 'income'."},
+                status=400,
+            )
 
-        # Group by year or month
-        if time_period == "year":
-            grouped_data = (
-                expenses.annotate(year=TruncYear("date"))
-                .values("year")
-                .order_by("year")
-                .annotate(total=Sum("amount"))
-            )
-            result = [
-                {"year": item["year"].year, "total": item["total"]} for item in grouped_data
-            ]
-        elif time_period == "month":
-            grouped_data = (
-                expenses.annotate(month=TruncMonth("date"))
-                .values("month")
-                .order_by("month")
-                .annotate(total=Sum("amount"))
-            )
-            result = [
-                {"month": item["month"].strftime("%Y-%m"), "total": item["total"]}
-                for item in grouped_data
-            ]
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=timespan * 30)  # Approximate month length
+        transactions = Transaction.objects.filter(
+            type=transaction_type, date__range=[start_date, end_date]
+        )
+
+        grouped_data = (
+            transactions.annotate(month=TruncMonth("date"))
+            .values("month")
+            .order_by("month")
+            .annotate(total=Sum("amount"))
+        )
+        result = [
+            {"month": item["month"].strftime("%Y-%m"), "total": item["total"]}
+            for item in grouped_data
+        ]
 
         return Response(result)

@@ -43,8 +43,8 @@ urlpatterns = [
         name="all-time-sum",
     ),
     path(
-        "transactions/expense-by-time/<str:time_period>/",
-        views.GetExpensesByTime.as_view(),
+        "transactions/transactions-by-timespan/<str:transaction_type>/<int:timespan>/",
+        views.GetTransactionsByTimespan.as_view(),
         name="expense-by-time",
     ),
 ]
