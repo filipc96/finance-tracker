@@ -2,8 +2,7 @@ import { useState } from "react";
 import { faTerminal } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
-const Terminal = () => {
-  const [isOpen, setIsOpen] = useState(false);
+const Terminal = ({ isOpen, setIsOpen }) => {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState([]);
 
