@@ -1,5 +1,6 @@
 import { Outlet } from "react-router";
 import NavigationBar from "../components/NavigationBar";
+import Terminal from "../components/Terminal";
 
 const SharedLayout = ({ menuItems }) => {
   return (
@@ -10,6 +11,7 @@ const SharedLayout = ({ menuItems }) => {
           <Outlet />
         </div>
       </main>
+      <Terminal />
     </div>
   );
 };
