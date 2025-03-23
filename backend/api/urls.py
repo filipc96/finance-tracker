@@ -47,4 +47,5 @@ urlpatterns = [
         views.GetTransactionsByTimespan.as_view(),
         name="expense-by-time",
     ),
+    path("settings/", views.SettingsListCreate.as_view(), name="settings"),
 ]

@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Category, Transaction
+from .models import Category, Transaction, Settings
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -12,7 +12,11 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user = User.objects.create_user(**validated_data)
         return user
-
+class SettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Settings
+        fields = ["dark_mode", "open_ai_api_key"]
+        extra_kwargs = {"user": {"read_only": True}}
 
 class CategorySerializer(serializers.ModelSerializer):
     transactions_sum = serializers.DecimalField(

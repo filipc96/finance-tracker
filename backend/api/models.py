@@ -22,6 +22,25 @@ def create_user_account(sender, instance, created, **kwargs):
         Account.objects.create(user=instance)
 
 
+class Settings(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    dark_mode = models.BooleanField(default=False)
+    open_ai_api_key = models.CharField(max_length=255, blank=True, null=True)
+    openai_key = models.CharField(max_length=255, blank=True)
+
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s settings"
+
+
+@receiver(post_save, sender=User)
+def create_user_settings(sender, instance, created, **kwargs):
+    if created:
+        Settings.objects.create(user=instance)
+
+
 class Category(models.Model):
 
     TYPE_CHOICES = [

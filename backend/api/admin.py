@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Transaction, Category, Account
+from .models import Transaction, Category, Account, Settings
 from django.contrib.auth.models import User
 
 from django.contrib.auth.admin import UserAdmin as AuthUserAdmin
@@ -23,10 +23,11 @@ class AccountsUserAdmin(AuthUserAdmin):
 class CategoryAdmin(admin.ModelAdmin):
     readonly_fields = ["id"]
 
-
 admin.site.unregister(User)
 admin.site.register(User, AccountsUserAdmin)
 
 # Register your models here.
 admin.site.register(Transaction)
 admin.site.register(Category, CategoryAdmin)
+admin.site.register(Settings)
+

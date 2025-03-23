@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import UserSerializer, TransactionSerializer, CategorySerializer
+from .serializers import SettingsSerializer, UserSerializer, TransactionSerializer, CategorySerializer
 from .models import Transaction, Category
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum
@@ -52,6 +52,27 @@ class GetUser(APIView):
         username = request.user.username
         balance = request.user.account.balance
         return Response({"username": username, "balance": balance})
+
+
+class SettingsListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SettingsSerializer
+
+    def get(self, request):
+        dark_mode = request.user.settings.dark_mode
+        open_ai_api_key = request.user.settings.open_ai_api_key
+        return Response({
+            "dark_mode": dark_mode,
+            "open_ai_api_key": open_ai_api_key
+        })
+    
+    def post(self, request):
+        settings = request.user.settings
+        serializer = SettingsSerializer(settings, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TransactionListCreate(generics.ListCreateAPIView):
@@ -155,6 +176,7 @@ class GetAllTimeTransactionSum(APIView):
         filtered = Transaction.objects.filter(type=transaction_type)
 
         return Response(filtered.aggregate(total_sum=Sum("amount"))["total_sum"])
+
 
 class GetTransactionsByTimespan(APIView):
     permission_classes = [AllowAny]
