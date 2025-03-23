@@ -4,7 +4,12 @@ import api from "../api";
 import { useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEye,
+  faEyeSlash,
+  faUser,
+  faLock,
+} from "@fortawesome/free-solid-svg-icons";
 
 const Form = ({ route, method }) => {
   const [username, setUsername] = useState("");
@@ -53,21 +58,35 @@ const Form = ({ route, method }) => {
           <form onSubmit={handleSubmit}>
             <div className="py-4">
               <span className="mb-2 text-md">Username</span>
-              <input
-                type="text"
-                className="w-full p-2 border border-gray-300 rounded-md placeholder:font-light placeholder:text-gray-500"
-                onChange={(e) => setUsername(e.target.value)}
-                value={username}
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                  <FontAwesomeIcon icon={faUser} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  className="w-full pl-10 p-3 border border-gray-300 rounded-lg transition-all duration-200 
+                  focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400
+                  placeholder:text-gray-400 placeholder:font-light text-gray-700"
+                  onChange={(e) => setUsername(e.target.value)}
+                  value={username}
+                  placeholder="Type your username here"
+                />
+              </div>
             </div>
             <div className="py-4">
               <span className="mb-2 text-md">Password</span>
               <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                  <FontAwesomeIcon icon={faLock} className="text-gray-400" />
+                </div>
                 <input
                   type={showPassword ? "text" : "password"}
-                  className="w-full p-2 border border-gray-300 rounded-md placeholder:font-light placeholder:text-gray-500"
+                  className="w-full pl-10 p-3 border border-gray-300 rounded-lg transition-all duration-200
+                  focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400
+                  placeholder:text-gray-400 placeholder:font-light text-gray-700"
                   onChange={(e) => setPassword(e.target.value)}
                   value={password}
+                  placeholder="Type your password here"
                 />
                 <button
                   type="button"
