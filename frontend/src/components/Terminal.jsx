@@ -15,11 +15,20 @@ const Terminal = () => {
     }
     if (input.trim() == "clear") {
       setHistory([]);
+    } else if (input.trim().startsWith("add")) {
+      const [_, ...args] = input.trim().split(" ");
+      if (args.length == 0) {
+        setHistory([...history, `Usage: add [task]`]);
+      }
+      if (args[0] == "expense") {
+        setHistory([...history, `Adding expense ${args.join(" ")}`]);
+      } else if (args[0] == "income") {
+        setHistory([...history, `Adding income ${args.join(" ")}`]);
+      }
     } else {
       setHistory([...history, `Command not found: ${input}`]);
     }
   };
-
   return (
     <div className="fixed bottom-4 right-4 z-50">
       <button
