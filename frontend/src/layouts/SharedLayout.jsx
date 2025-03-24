@@ -1,14 +1,21 @@
 import { Outlet } from "react-router";
 import NavigationBar from "../components/NavigationBar";
 import Terminal from "../components/Terminal";
+import Chat from "../components/Chat";
 import { useState, useEffect } from "react";
-import { faBars, faXmark } from "@fortawesome/free-solid-svg-icons";
+import {
+  faBars,
+  faXmark,
+  faTerminal,
+  faMessage,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 const SharedLayout = ({ menuItems }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 726);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -22,6 +29,10 @@ const SharedLayout = ({ menuItems }) => {
       if (e.ctrlKey && e.key === "j") {
         e.preventDefault();
         setIsTerminalOpen((prev) => !prev);
+      }
+      if (e.ctrlKey && e.key === "p") {
+        e.preventDefault();
+        setIsChatOpen((prev) => !prev);
       }
     };
 
@@ -89,7 +100,26 @@ const SharedLayout = ({ menuItems }) => {
         />
       )}
 
+      <div className="fixed bottom-4 right-4 z-50 flex space-x-4">
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors duration-200 shadow-lg"
+          aria-label="Toggle Chat"
+        >
+          <FontAwesomeIcon icon={faMessage} size="lg" />
+        </button>
+
+        <button
+          onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+          className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors duration-200 shadow-lg"
+          aria-label="Toggle Terminal"
+        >
+          <FontAwesomeIcon icon={faTerminal} size="lg" />
+        </button>
+      </div>
+
       <Terminal isOpen={isTerminalOpen} setIsOpen={setIsTerminalOpen} />
+      <Chat isOpen={isChatOpen} />
     </div>
   );
 };

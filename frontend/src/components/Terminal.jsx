@@ -34,7 +34,7 @@ const Terminal = ({ isOpen, setIsOpen }) => {
     setInput("");
 
     if (commands.has(command)) {
-      commands.get(command)(args || "");
+      commands.get(command)(args);
     }
     // else if (input.trim().startsWith("add")) {
     //   const [_, ...args] = input.trim().split(" ");
@@ -52,14 +52,6 @@ const Terminal = ({ isOpen, setIsOpen }) => {
   };
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors duration-200 shadow-lg"
-        aria-label="Toggle Terminal"
-      >
-        <FontAwesomeIcon icon={faTerminal} size="lg" />
-      </button>
-
       {isOpen && (
         <div className="absolute bottom-16 right-0 w-[32rem] h-80 bg-gray-900 text-gray-100 rounded-lg shadow-2xl overflow-hidden border border-gray-700">
           <div className="flex flex-col h-full">
