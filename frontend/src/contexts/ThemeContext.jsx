@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-
+import api from "../api";
 const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
@@ -9,6 +9,12 @@ export const ThemeProvider = ({ children }) => {
   });
 
   useEffect(() => {
+    if (!localStorage.getItem("darkMode")) {
+      api.get("/api/settings/").then((response) => {
+        setDarkMode(response.data.dark_mode);
+      });
+    }
+
     localStorage.setItem("darkMode", JSON.stringify(darkMode));
     if (darkMode) {
       document.documentElement.classList.add("dark");

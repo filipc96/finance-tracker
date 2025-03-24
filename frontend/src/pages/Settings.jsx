@@ -1,18 +1,31 @@
 import ToggleButton from "../components/ToggleButton";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import { useTheme } from "../contexts/ThemeContext";
+import api from "../api";
 
 const Settings = () => {
+  const { darkMode } = useTheme();
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    api.get("/api/settings/").then((response) => {
+      setApiKey(response.data.open_ai_api_key);
+    });
+  }, []);
+
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      // TODO: Implement save logic
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await api.post("/api/settings/", {
+        dark_mode: darkMode,
+        open_ai_api_key: apiKey,
+      });
+    } catch (error) {
+      console.error("Error saving settings:", error);
     } finally {
       setIsSaving(false);
     }

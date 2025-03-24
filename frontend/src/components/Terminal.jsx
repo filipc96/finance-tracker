@@ -5,26 +5,48 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 const Terminal = ({ isOpen, setIsOpen }) => {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState([]);
+  const commands = new Map([
+    ["help", () => setHistory([...history, "help"])],
+    ["clear", () => setHistory([])],
+    [
+      "add",
+      (args) =>
+        setHistory([
+          ...history,
+          "add " +
+            "Type: " +
+            args[0] +
+            " Category: " +
+            args[1] +
+            " Amount: " +
+            args[2] +
+            " RSD",
+        ]),
+    ],
+  ]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (input.trim()) {
-      setHistory([...history, `> ${input}`]);
-      setInput("");
+    let trimmedInput = input.trim();
+    let args = trimmedInput.split(" ");
+    let command = args.shift() || "";
+
+    setInput("");
+
+    if (commands.has(command)) {
+      commands.get(command)(args || "");
     }
-    if (input.trim() == "clear") {
-      setHistory([]);
-    } else if (input.trim().startsWith("add")) {
-      const [_, ...args] = input.trim().split(" ");
-      if (args.length == 0) {
-        setHistory([...history, `Usage: add [task]`]);
-      }
-      if (args[0] == "expense") {
-        setHistory([...history, `Adding expense ${args.join(" ")}`]);
-      } else if (args[0] == "income") {
-        setHistory([...history, `Adding income ${args.join(" ")}`]);
-      }
-    } else {
+    // else if (input.trim().startsWith("add")) {
+    //   const [_, ...args] = input.trim().split(" ");
+    //   if (args.length == 0) {
+    //     setHistory([...history, `Usage: add [task]`]);
+    //   }
+    //   if (args[0] == "expense") {
+    //     setHistory([...history, `Adding expense ${args.join(" ")}`]);
+    //   } else if (args[0] == "income") {
+    //     setHistory([...history, `Adding income ${args.join(" ")}`]);
+    //   }
+    else {
       setHistory([...history, `Command not found: ${input}`]);
     }
   };
@@ -45,11 +67,11 @@ const Terminal = ({ isOpen, setIsOpen }) => {
               <span className="text-sm font-semibold text-gray-300">
                 Terminal
               </span>
-              {/* <div className="flex space-x-2">
+              <div className="flex space-x-2">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              </div> */}
+              </div>
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto font-mono text-sm space-y-1 bg-gradient-to-b from-gray-900 to-gray-800">
