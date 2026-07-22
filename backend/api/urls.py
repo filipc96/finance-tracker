@@ -48,4 +48,5 @@ urlpatterns = [
         name="expense-by-time",
     ),
     path("settings/", views.SettingsListCreate.as_view(), name="settings"),
+    path("chat/", views.ChatView.as_view(), name="chat"),
 ]

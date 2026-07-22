@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum, Value
 from django.db.models.functions import TruncMonth, TruncYear, Coalesce
 from datetime import datetime, timedelta
+from openai import OpenAI, OpenAIError, AuthenticationError, RateLimitError
 
 
 class CreateUserView(generics.CreateAPIView):
@@ -221,6 +222,108 @@ class GetAllTimeTransactionSum(APIView):
         )
 
         return Response(filtered.aggregate(total_sum=Sum("amount"))["total_sum"])
+
+
+def build_financial_context(user):
+    """Plain-text summary of the user's finances for the chat system prompt."""
+    balance = user.account.balance
+    today = datetime.now().date()
+
+    recent = (
+        Transaction.objects.filter(user=user)
+        .select_related("category")
+        .order_by("-date", "-id")[:20]
+    )
+    recent_lines = [
+        f"- {t.date} | {t.type} | {t.category.name} | {t.name} | {t.amount}"
+        for t in recent
+    ]
+
+    category_sums = Category.objects.filter(user=user).annotate(
+        total=Coalesce(Sum("transaction__amount"), Value(Decimal("0.00")))
+    )
+    category_lines = [
+        f"- {c.name} ({c.type}): {c.total}" for c in category_sums
+    ]
+
+    totals = {
+        row["type"]: row["total"]
+        for row in Transaction.objects.filter(user=user)
+        .values("type")
+        .annotate(total=Sum("amount"))
+    }
+
+    return "\n".join(
+        [
+            f"Today's date: {today}",
+            f"Account balance: {balance}",
+            f"All-time income: {totals.get('income', Decimal('0.00'))}",
+            f"All-time expenses: {totals.get('expense', Decimal('0.00'))}",
+            "",
+            "Sums by category:",
+            *(category_lines or ["- (no categories yet)"]),
+            "",
+            "Most recent transactions (date | type | category | name | amount):",
+            *(recent_lines or ["- (no transactions yet)"]),
+        ]
+    )
+
+
+class ChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        message = (request.data.get("message") or "").strip()
+        if not message:
+            return Response(
+                {"error": "Message is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        api_key = request.user.settings.open_ai_api_key
+        if not api_key:
+            return Response(
+                {
+                    "error": "No OpenAI API key configured. "
+                    "Add one on the Settings page."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        system_prompt = (
+            "You are a helpful personal finance assistant inside a "
+            "finance-tracker app. Answer concisely using the user's "
+            "financial data below. If asked something unrelated to "
+            "personal finance, politely steer back to finances.\n\n"
+            + build_financial_context(request.user)
+        )
+
+        try:
+            client = OpenAI(api_key=api_key, timeout=30)
+            completion = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": message},
+                ],
+                max_tokens=500,
+            )
+            return Response({"response": completion.choices[0].message.content})
+        except AuthenticationError:
+            return Response(
+                {"error": "Invalid OpenAI API key."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except RateLimitError:
+            return Response(
+                {"error": "OpenAI rate limit reached. Try again shortly."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except OpenAIError:
+            return Response(
+                {"error": "Failed to reach OpenAI. Try again later."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
 
 class GetTransactionsByTimespan(APIView):

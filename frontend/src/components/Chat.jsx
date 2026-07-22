@@ -32,10 +32,11 @@ const Chat = ({ isOpen }) => {
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Error sending message:", error);
+      const errorText =
+        error.response?.data?.error || "Sorry, I encountered an error.";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Sorry, I encountered an error." },
+        { role: "assistant", content: errorText },
       ]);
     } finally {
       setIsLoading(false);

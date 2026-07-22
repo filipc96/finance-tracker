@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
 from rest_framework import status
@@ -176,6 +177,86 @@ class AggregateIsolationTests(APITestCase):
             self.assertEqual(
                 response.status_code, status.HTTP_401_UNAUTHORIZED, url
             )
+
+
+class ChatTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+        self.user.settings.open_ai_api_key = "sk-test"
+        self.user.settings.save()
+
+    def _mock_completion(self, mock_openai, content="Here is your answer."):
+        completion = MagicMock()
+        completion.choices = [MagicMock(message=MagicMock(content=content))]
+        mock_openai.return_value.chat.completions.create.return_value = (
+            completion
+        )
+        return mock_openai.return_value.chat.completions.create
+
+    @patch("api.views.OpenAI")
+    def test_chat_success(self, mock_openai):
+        self._mock_completion(mock_openai)
+        response = self.client.post("/api/chat/", {"message": "How am I doing?"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["response"], "Here is your answer.")
+
+    @patch("api.views.OpenAI")
+    def test_chat_context_includes_transactions(self, mock_openai):
+        cat = Category.objects.create(user=self.user, name="Food", type="expense")
+        create_transaction(self.user, cat, "42.00", name="groceries-run")
+        create_call = self._mock_completion(mock_openai)
+
+        self.client.post("/api/chat/", {"message": "What did I buy?"})
+
+        system_prompt = create_call.call_args.kwargs["messages"][0]["content"]
+        self.assertIn("groceries-run", system_prompt)
+        self.assertIn("Food", system_prompt)
+
+    def test_chat_requires_message(self):
+        response = self.client.post("/api/chat/", {"message": "  "})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_chat_requires_api_key(self):
+        self.user.settings.open_ai_api_key = ""
+        self.user.settings.save()
+        response = self.client.post("/api/chat/", {"message": "hi"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Settings page", response.data["error"])
+
+    def test_chat_requires_auth(self):
+        self.client.force_authenticate(None)
+        response = self.client.post("/api/chat/", {"message": "hi"})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ChangePasswordTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice", "old-pass-123")
+        self.client.force_authenticate(self.user)
+
+    def test_change_password_success(self):
+        response = self.client.post(
+            "/api/user/change-password/",
+            {"old_password": "old-pass-123", "new_password": "new-pass-456"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("new-pass-456"))
+
+    def test_wrong_old_password(self):
+        response = self.client.post(
+            "/api/user/change-password/",
+            {"old_password": "wrong", "new_password": "new-pass-456"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_weak_new_password_rejected(self):
+        response = self.client.post(
+            "/api/user/change-password/",
+            {"old_password": "old-pass-123", "new_password": "123"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class CategoryTests(APITestCase):
