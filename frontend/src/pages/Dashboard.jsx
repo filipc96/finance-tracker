@@ -3,6 +3,7 @@ import Chart from "../components/Chart";
 import DashboardCard from "../components/DashboardCard";
 import AddTransaction from "../components/AddTransaction";
 import api from "../api";
+import toast from "react-hot-toast";
 import { format } from "date-fns";
 
 const Dashboard = () => {
@@ -33,19 +34,16 @@ const Dashboard = () => {
       );
       setAllTimeSpent(allTimeExpenseData.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      toast.error("Failed to load dashboard data.");
     }
   };
 
   const formatDate = (dateString) => {
     const dateObject = new Date(dateString);
     if (!isNaN(dateObject.getTime())) {
-      console.log(dateObject);
       return format(dateObject, "MM/dd/yyyy");
-    } else {
-      console.error("Invalid date value:", dateString);
-      return "Invalid Date"; // or any fallback value
     }
+    return "Invalid Date";
   };
 
   useEffect(() => {

@@ -1,53 +1,92 @@
 import { useState } from "react";
 import { faTerminal } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import api from "../api";
+
+const HELP_LINES = [
+  "Available commands:",
+  "  help                                        Show this help",
+  "  clear                                       Clear the terminal",
+  "  add <expense|income> <category> <amount> [description...]",
+  "                                              Add a transaction",
+];
 
 const Terminal = ({ isOpen, setIsOpen }) => {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState([]);
-  const commands = new Map([
-    ["help", () => setHistory([...history, "help"])],
-    ["clear", () => setHistory([])],
-    [
-      "add",
-      (args) =>
-        setHistory([
-          ...history,
-          "add " +
-            "Type: " +
-            args[0] +
-            " Category: " +
-            args[1] +
-            " Amount: " +
-            args[2] +
-            " RSD",
-        ]),
-    ],
-  ]);
+
+  const appendLines = (lines) =>
+    setHistory((prev) => [...prev, ...(Array.isArray(lines) ? lines : [lines])]);
+
+  const handleAdd = async (args) => {
+    const [type, categoryName, amountArg, ...descParts] = args;
+
+    if (!type || !categoryName || !amountArg) {
+      appendLines("Usage: add <expense|income> <category> <amount> [description...]");
+      return;
+    }
+    if (type !== "expense" && type !== "income") {
+      appendLines(`Invalid type "${type}". Use expense or income.`);
+      return;
+    }
+    const amount = Number(amountArg);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      appendLines(`Invalid amount "${amountArg}".`);
+      return;
+    }
+
+    try {
+      const res = await api.get("/api/categories/");
+      const category = res.data.find(
+        (c) =>
+          c.type === type &&
+          c.name.toLowerCase() === categoryName.toLowerCase()
+      );
+      if (!category) {
+        const available = res.data
+          .filter((c) => c.type === type)
+          .map((c) => c.name)
+          .join(", ");
+        appendLines([
+          `Category "${categoryName}" not found for type ${type}.`,
+          available ? `Available: ${available}` : "No categories exist yet.",
+        ]);
+        return;
+      }
+
+      const name = descParts.join(" ") || category.name;
+      await api.post("/api/transactions/", {
+        date: new Date().toISOString().slice(0, 10),
+        amount: amount.toFixed(2),
+        name,
+        category: category.id,
+        type,
+      });
+      appendLines(`Added ${type} "${name}": ${amount.toFixed(2)} (${category.name})`);
+    } catch (error) {
+      appendLines(
+        `Error: ${error.response?.data?.error || "failed to add transaction."}`
+      );
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    let trimmedInput = input.trim();
-    let args = trimmedInput.split(" ");
-    let command = args.shift() || "";
+    const trimmedInput = input.trim();
+    const args = trimmedInput.split(/\s+/);
+    const command = args.shift() || "";
 
     setInput("");
+    if (!command) return;
 
-    if (commands.has(command)) {
-      commands.get(command)(args);
-    }
-    // else if (input.trim().startsWith("add")) {
-    //   const [_, ...args] = input.trim().split(" ");
-    //   if (args.length == 0) {
-    //     setHistory([...history, `Usage: add [task]`]);
-    //   }
-    //   if (args[0] == "expense") {
-    //     setHistory([...history, `Adding expense ${args.join(" ")}`]);
-    //   } else if (args[0] == "income") {
-    //     setHistory([...history, `Adding income ${args.join(" ")}`]);
-    //   }
-    else {
-      setHistory([...history, `Command not found: ${input}`]);
+    if (command === "help") {
+      appendLines(HELP_LINES);
+    } else if (command === "clear") {
+      setHistory([]);
+    } else if (command === "add") {
+      handleAdd(args);
+    } else {
+      appendLines(`Command not found: ${trimmedInput}`);
     }
   };
   return (

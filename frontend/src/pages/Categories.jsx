@@ -1,5 +1,6 @@
 import AddCategory from "../components/AddCategory";
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import api from "../api";
 import CategoryTable from "../components/CategoryTable";
 
@@ -10,20 +11,17 @@ const Categories = () => {
     api
       .get("/api/categories/")
       .then((response) => setCategories(response.data))
-      .catch((error) =>
-        console.error("Error fetching the categories: ", error)
-      );
+      .catch(() => toast.error("Failed to load categories."));
   };
 
   const deleteCategory = (id) => {
     api
       .delete(`/api/categories/delete/${id}`)
-      .then((res) => {
-        if (res.status === 204) console.log("Note deleted!");
-        else console.log("Failed to delete note.");
+      .then(() => {
+        toast.success("Category deleted.");
         getCategories();
       })
-      .catch((error) => console.log(error));
+      .catch(() => toast.error("Failed to delete category."));
   };
 
   useEffect(() => {

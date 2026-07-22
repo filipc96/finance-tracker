@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../api";
+import toast from "react-hot-toast";
 
 const Settings = () => {
   const { darkMode } = useTheme();
@@ -24,8 +25,9 @@ const Settings = () => {
         dark_mode: darkMode,
         open_ai_api_key: apiKey,
       });
+      toast.success("Settings saved.");
     } catch (error) {
-      console.error("Error saving settings:", error);
+      toast.error("Failed to save settings.");
     } finally {
       setIsSaving(false);
     }

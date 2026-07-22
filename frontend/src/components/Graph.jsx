@@ -11,6 +11,8 @@ import {
   Legend,
 } from "chart.js";
 import api from "../api";
+import { useTheme } from "../contexts/ThemeContext";
+import { buildLineOptions } from "../utils/chartTheme";
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +25,7 @@ ChartJS.register(
 );
 
 const Graph = () => {
+  const { darkMode } = useTheme();
   const [timespan, setTimespan] = useState(6);
   const [transactionTypes, setTransactionTypes] = useState(["expense"]);
   const [data, setData] = useState({});
@@ -89,46 +92,8 @@ const Graph = () => {
     })),
   };
 
-  const options = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top",
-        labels: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#374151"
-            : "#e5e7eb",
-        },
-        ticks: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
-      },
-      x: {
-        grid: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#374151"
-            : "#e5e7eb",
-        },
-        ticks: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
-      },
-    },
-  };
+  const options = buildLineOptions(darkMode);
+  options.scales.y.beginAtZero = true;
 
   return (
     <div className="flex flex-col rounded-md w-full">

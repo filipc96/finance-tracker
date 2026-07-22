@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from django.shortcuts import render
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -54,7 +56,39 @@ class GetUser(APIView):
     def get(self, request):
         username = request.user.username
         balance = request.user.account.balance
-        return Response({"username": username, "balance": balance})
+        return Response(
+            {
+                "username": username,
+                "balance": balance,
+                "date_joined": request.user.date_joined.date(),
+            }
+        )
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get("old_password", "")
+        new_password = request.data.get("new_password", "")
+
+        if not request.user.check_password(old_password):
+            return Response(
+                {"error": "Current password is incorrect."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user=request.user)
+        except ValidationError as e:
+            return Response(
+                {"error": " ".join(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request.user.set_password(new_password)
+        request.user.save()
+        return Response({"detail": "Password changed successfully."})
 
 
 class SettingsListCreate(APIView):

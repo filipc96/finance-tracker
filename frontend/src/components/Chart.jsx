@@ -11,6 +11,8 @@ import {
 import { useEffect, useState } from "react";
 import { Line } from "react-chartjs-2";
 import api from "../api";
+import { useTheme } from "../contexts/ThemeContext";
+import { buildLineOptions } from "../utils/chartTheme";
 
 ChartJS.register(
   CategoryScale,
@@ -24,6 +26,7 @@ ChartJS.register(
 
 const Chart = ({ type }) => {
   const [sums, setSums] = useState({});
+  const { darkMode } = useTheme();
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -33,46 +36,8 @@ const Chart = ({ type }) => {
       .then((res) => setSums(res.data))
       .catch((error) => console.log(error));
   }, []);
-  const options = {
-    responsive: true,
-    tension: 0.4,
-    plugins: {
-      legend: {
-        position: "top",
-        labels: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#374151"
-            : "#e5e7eb",
-        },
-        ticks: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
-      },
-      y: {
-        grid: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#374151"
-            : "#e5e7eb",
-        },
-        ticks: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
-      },
-    },
-  };
+
+  const options = buildLineOptions(darkMode);
 
   const labels = [
     "Jan",
@@ -89,15 +54,15 @@ const Chart = ({ type }) => {
     "Dec",
   ];
 
-  const darkModeBgColor =
+  const backgroundColor =
     type === "expense" ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.2)";
 
   const color =
     type === "expense"
-      ? document.documentElement.classList.contains("dark")
+      ? darkMode
         ? "rgb(239, 68, 68)"
         : "rgb(255, 99, 132)"
-      : document.documentElement.classList.contains("dark")
+      : darkMode
       ? "rgb(34, 197, 94)"
       : "rgb(99, 255, 132)";
 
@@ -108,7 +73,7 @@ const Chart = ({ type }) => {
         label: `${type === "expense" ? "Expenses" : "Incomes"}`,
         data: sums,
         borderColor: color,
-        backgroundColor: darkModeBgColor,
+        backgroundColor: backgroundColor,
         fill: true,
       },
     ],

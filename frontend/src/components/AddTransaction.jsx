@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import api from "../api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -16,9 +17,7 @@ const AddTransaction = ({ type, callback }) => {
     api
       .get("/api/categories/")
       .then((response) => setCategories(response.data))
-      .catch((error) =>
-        console.error("Error fetching the categories: ", error)
-      );
+      .catch(() => toast.error("Failed to load categories."));
   }, []);
 
   const getCategories = categories
@@ -35,7 +34,6 @@ const AddTransaction = ({ type, callback }) => {
     e.preventDefault();
 
     if (date && name && amount && category) {
-      console.log(name);
       const formattedDate = format(date, "yyyy-MM-dd");
       api
         .post("/api/transactions/", {
@@ -45,15 +43,13 @@ const AddTransaction = ({ type, callback }) => {
           amount: amount,
           category: category,
         })
-        .then((res) => {
-          if (res.status === 201) console.log("Transaction created!");
-          else console.log("Failed to create transaction!");
-
+        .then(() => {
+          toast.success(`${type === "expense" ? "Expense" : "Income"} added.`);
           if (callback) callback();
         })
-        .catch((error) => console.log(error));
+        .catch(() => toast.error("Failed to add transaction."));
     } else {
-      console.log("You can't leave the fields empty!");
+      toast.error("You can't leave the fields empty!");
     }
   };
   return (
@@ -126,11 +122,7 @@ const AddTransaction = ({ type, callback }) => {
             </label>
             <DatePicker
               selected={date}
-              onChange={(date) => {
-                let formatedDate = format(date, "yyyy-MM-dd");
-                setDate(formatedDate);
-                console.log(formatedDate);
-              }}
+              onChange={(date) => setDate(date)}
               customInput={<DateInputBox />}
             />
           </div>

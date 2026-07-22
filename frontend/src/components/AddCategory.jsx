@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 import api from "../api";
 
 const AddCategory = ({ callback }) => {
@@ -10,15 +11,13 @@ const AddCategory = ({ callback }) => {
     if (categoryName && categoryType) {
       api
         .post("/api/categories/", { name: categoryName, type: categoryType })
-        .then((res) => {
-          if (res.status === 201) console.log("Category created!");
-          else console.log("Failed to create category!");
-
+        .then(() => {
+          toast.success("Category created.");
           if (callback) callback();
         })
-        .catch((error) => console.log(error));
+        .catch(() => toast.error("Failed to create category."));
     } else {
-      console.log("You can't leave the category name or category type empty!");
+      toast.error("You can't leave the category name or type empty!");
     }
   };
 

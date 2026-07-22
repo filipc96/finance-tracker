@@ -22,6 +22,7 @@ import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { useEffect } from "react";
+import { Toaster } from "react-hot-toast";
 
 const menuItems = [
   {
@@ -105,6 +106,7 @@ function RegisterWithCleanup() {
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" />
       <Routes>
         {/* Auth routes outside ThemeProvider */}
         <Route path="/login" element={<LoginWithCleanup />} />

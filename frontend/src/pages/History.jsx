@@ -1,6 +1,7 @@
 import AddTransaction from "../components/AddTransaction";
 import TransactionTable from "../components/TransactionsTable";
 import api from "../api";
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 
 const History = () => {
@@ -26,7 +27,7 @@ const History = () => {
           // Page no longer exists (e.g. deleted last item on last page)
           getTransactions(1);
         } else {
-          console.error("Error fetching the transactions: ", error);
+          toast.error("Failed to load transactions.");
         }
       });
   };
@@ -34,12 +35,11 @@ const History = () => {
   const deleteTransaction = (id) => {
     api
       .delete(`/api/transactions/delete/${id}`)
-      .then((res) => {
-        if (res.status === 204) console.log("Transaction deleted!");
-        else console.log("Failed to delete transaction.");
+      .then(() => {
+        toast.success("Transaction deleted.");
         getTransactions();
       })
-      .catch((error) => console.log(error));
+      .catch(() => toast.error("Failed to delete transaction."));
   };
 
   useEffect(() => {

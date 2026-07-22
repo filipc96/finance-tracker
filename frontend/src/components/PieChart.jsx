@@ -11,6 +11,8 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import { useTheme } from "../contexts/ThemeContext";
+import { getChartTheme, PIE_PALETTE } from "../utils/chartTheme";
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +25,8 @@ ChartJS.register(
 
 const PieChart = ({ type }) => {
   const [categories, setCategories] = useState([]);
+  const { darkMode } = useTheme();
+  const { textColor, pieBorderColor } = getChartTheme(darkMode);
 
   useEffect(() => {
     api
@@ -42,17 +46,8 @@ const PieChart = ({ type }) => {
       {
         label: "Sums by Category",
         data: values,
-        backgroundColor: [
-          "rgba(239, 68, 68, 0.8)", // red
-          "rgba(34, 197, 94, 0.8)", // green
-          "rgba(59, 130, 246, 0.8)", // blue
-          "rgba(168, 85, 247, 0.8)", // purple
-          "rgba(251, 146, 60, 0.8)", // orange
-          "rgba(236, 72, 153, 0.8)", // pink
-        ],
-        borderColor: document.documentElement.classList.contains("dark")
-          ? "#1a1c23"
-          : "#ffffff",
+        backgroundColor: PIE_PALETTE,
+        borderColor: pieBorderColor,
         borderWidth: 2,
       },
     ],
@@ -63,11 +58,7 @@ const PieChart = ({ type }) => {
     plugins: {
       legend: {
         position: "top",
-        labels: {
-          color: document.documentElement.classList.contains("dark")
-            ? "#e2e8f0"
-            : "#000",
-        },
+        labels: { color: textColor },
       },
     },
   };
