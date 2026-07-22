@@ -26,9 +26,19 @@ def create_user_account(sender, instance, created, **kwargs):
 
 
 class Settings(models.Model):
+    T212_ENVIRONMENT_CHOICES = [
+        ("live", "Live"),
+        ("demo", "Demo"),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     dark_mode = models.BooleanField(default=False)
     open_ai_api_key = models.CharField(max_length=255, blank=True, null=True)
+    t212_api_key = models.CharField(max_length=255, blank=True, null=True)
+    t212_api_secret = models.CharField(max_length=255, blank=True, null=True)
+    t212_environment = models.CharField(
+        max_length=4, choices=T212_ENVIRONMENT_CHOICES, default="live"
+    )
 
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
@@ -100,6 +110,31 @@ class Budget(models.Model):
 
     def __str__(self):
         return f"{self.category.name} - {self.month:%Y-%m}"
+
+
+class PortfolioSnapshot(models.Model):
+    """Daily cache of the user's Trading 212 portfolio state."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField()
+    total_value = models.DecimalField(max_digits=14, decimal_places=2)
+    cash = models.DecimalField(max_digits=14, decimal_places=2)
+    invested = models.DecimalField(max_digits=14, decimal_places=2)
+    unrealized_pl = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, blank=True)
+    positions = models.JSONField(default=list)
+    fetched_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "date"],
+                name="unique_portfolio_snapshot_per_day",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} portfolio @ {self.date}"
 
 
 class RecurringTransaction(models.Model):

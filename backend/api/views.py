@@ -20,8 +20,16 @@ from .serializers import (
     TransactionSerializer,
     UserSerializer,
 )
-from .models import Budget, RecurringTransaction, Transaction, Category
+from .models import (
+    Budget,
+    Category,
+    PortfolioSnapshot,
+    RecurringTransaction,
+    Transaction,
+)
 from .services import process_recurring
+from .t212 import T212AuthError, T212Client, T212Error, T212RateLimited
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import TruncMonth, TruncYear, Coalesce
@@ -109,12 +117,8 @@ class SettingsListCreate(APIView):
     serializer_class = SettingsSerializer
 
     def get(self, request):
-        dark_mode = request.user.settings.dark_mode
-        open_ai_api_key = request.user.settings.open_ai_api_key
-        return Response({
-            "dark_mode": dark_mode,
-            "open_ai_api_key": open_ai_api_key
-        })
+        settings = request.user.settings
+        return Response(SettingsSerializer(settings).data)
     
     def post(self, request):
         settings = request.user.settings
@@ -288,6 +292,147 @@ class BudgetDetail(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Budget.objects.filter(user=self.request.user)
+
+
+PORTFOLIO_STALE_MINUTES = 15
+
+
+def to_decimal(value):
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError):
+        return Decimal("0.00")
+
+
+def serialize_snapshot(snapshot, stale=False, warning=None):
+    payload = {
+        "positions": snapshot.positions,
+        "cash": snapshot.cash,
+        "invested": snapshot.invested,
+        "total_value": snapshot.total_value,
+        "unrealized_pl": snapshot.unrealized_pl,
+        "currency": snapshot.currency,
+        "fetched_at": snapshot.fetched_at,
+        "stale": stale,
+    }
+    if warning:
+        payload["warning"] = warning
+    return payload
+
+
+class StocksPortfolio(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        settings = request.user.settings
+        if not settings.t212_api_key or not settings.t212_api_secret:
+            return Response(
+                {
+                    "error": "No Trading 212 API credentials configured. "
+                    "Add them on the Settings page."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        latest = (
+            PortfolioSnapshot.objects.filter(user=request.user)
+            .order_by("-date")
+            .first()
+        )
+        refresh_requested = request.query_params.get("refresh") == "1"
+        if latest and not refresh_requested:
+            age = timezone.now() - latest.fetched_at
+            if age.total_seconds() < PORTFOLIO_STALE_MINUTES * 60:
+                return Response(serialize_snapshot(latest))
+
+        client = T212Client(
+            settings.t212_api_key,
+            settings.t212_api_secret,
+            settings.t212_environment,
+        )
+        try:
+            raw_positions = client.get_positions()
+            raw_cash = client.get_cash()
+        except T212AuthError:
+            return Response(
+                {"error": "Invalid Trading 212 credentials."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except T212RateLimited:
+            if latest:
+                return Response(
+                    serialize_snapshot(
+                        latest,
+                        stale=True,
+                        warning="Trading 212 rate limit hit — showing cached data.",
+                    )
+                )
+            return Response(
+                {"error": "Trading 212 rate limit hit. Try again shortly."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except T212Error:
+            if latest:
+                return Response(
+                    serialize_snapshot(
+                        latest,
+                        stale=True,
+                        warning="Trading 212 unreachable — showing cached data.",
+                    )
+                )
+            return Response(
+                {"error": "Failed to reach Trading 212. Try again later."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        positions = []
+        invested = Decimal("0.00")
+        positions_value = Decimal("0.00")
+        unrealized_pl = Decimal("0.00")
+        currency = ""
+        for p in raw_positions or []:
+            instrument = p.get("instrument") or {}
+            wallet = p.get("walletImpact") or {}
+            value = to_decimal(wallet.get("currentValue"))
+            pl = to_decimal(wallet.get("unrealizedProfitLoss"))
+            invested += to_decimal(wallet.get("totalCost"))
+            positions_value += value
+            unrealized_pl += pl
+            currency = currency or wallet.get("currency") or ""
+            positions.append(
+                {
+                    "ticker": instrument.get("ticker"),
+                    "name": instrument.get("name"),
+                    "currency": instrument.get("currency"),
+                    "quantity": p.get("quantity"),
+                    "average_price": p.get("averagePricePaid"),
+                    "current_price": p.get("currentPrice"),
+                    "value": str(value),
+                    "unrealized_pl": str(pl),
+                    "fx_impact": str(to_decimal(wallet.get("fxImpact"))),
+                }
+            )
+
+        cash_data = raw_cash or {}
+        cash = to_decimal(
+            cash_data.get("free", cash_data.get("cash", 0))
+        )
+        currency = cash_data.get("currencyCode") or currency
+
+        snapshot, _ = PortfolioSnapshot.objects.update_or_create(
+            user=request.user,
+            date=timezone.now().date(),
+            defaults={
+                "total_value": cash + positions_value,
+                "cash": cash,
+                "invested": invested,
+                "unrealized_pl": unrealized_pl,
+                "currency": currency,
+                "positions": positions,
+                "fetched_at": timezone.now(),
+            },
+        )
+        return Response(serialize_snapshot(snapshot))
 
 
 CSV_COLUMNS = ["date", "name", "amount", "type", "category"]

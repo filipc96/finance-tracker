@@ -13,10 +13,12 @@ from .models import (
     Account,
     Budget,
     Category,
+    PortfolioSnapshot,
     RecurringTransaction,
     Settings,
     Transaction,
 )
+from .t212 import T212AuthError, T212RateLimited
 
 
 def create_user(username="alice", password="test-pass-123"):
@@ -354,6 +356,109 @@ class RecurringTests(APITestCase):
             },
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+SAMPLE_POSITION = {
+    "instrument": {
+        "ticker": "AAPL_US_EQ",
+        "name": "Apple",
+        "currency": "USD",
+        "isin": "US0378331005",
+    },
+    "quantity": 2,
+    "averagePricePaid": 150.0,
+    "currentPrice": 200.0,
+    "walletImpact": {
+        "currency": "EUR",
+        "currentValue": 380.0,
+        "totalCost": 300.0,
+        "unrealizedProfitLoss": 80.0,
+        "fxImpact": -5.0,
+    },
+}
+
+SAMPLE_CASH = {"free": 120.5, "currencyCode": "EUR"}
+
+
+class StocksTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+        self.user.settings.t212_api_key = "key"
+        self.user.settings.t212_api_secret = "secret"
+        self.user.settings.save()
+
+    def _mock_client(self, mock_cls):
+        instance = mock_cls.return_value
+        instance.get_positions.return_value = [SAMPLE_POSITION]
+        instance.get_cash.return_value = SAMPLE_CASH
+        return instance
+
+    @patch("api.views.T212Client")
+    def test_portfolio_normalizes_and_snapshots(self, mock_cls):
+        self._mock_client(mock_cls)
+        response = self.client.get("/api/stocks/portfolio/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["cash"], Decimal("120.50"))
+        self.assertEqual(response.data["total_value"], Decimal("500.50"))
+        self.assertEqual(response.data["invested"], Decimal("300.00"))
+        self.assertEqual(response.data["currency"], "EUR")
+        position = response.data["positions"][0]
+        self.assertEqual(position["ticker"], "AAPL_US_EQ")
+        self.assertEqual(position["unrealized_pl"], "80.00")
+        self.assertEqual(
+            PortfolioSnapshot.objects.filter(user=self.user).count(), 1
+        )
+
+    @patch("api.views.T212Client")
+    def test_fresh_snapshot_served_from_cache(self, mock_cls):
+        self._mock_client(mock_cls)
+        self.client.get("/api/stocks/portfolio/")
+        mock_cls.reset_mock()
+
+        response = self.client.get("/api/stocks/portfolio/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_cls.assert_not_called()
+
+    @patch("api.views.T212Client")
+    def test_refresh_param_bypasses_cache_single_daily_row(self, mock_cls):
+        self._mock_client(mock_cls)
+        self.client.get("/api/stocks/portfolio/")
+        self.client.get("/api/stocks/portfolio/?refresh=1")
+        self.assertEqual(mock_cls.call_count, 2)
+        self.assertEqual(
+            PortfolioSnapshot.objects.filter(user=self.user).count(), 1
+        )
+
+    def test_missing_credentials_400(self):
+        self.user.settings.t212_api_key = ""
+        self.user.settings.save()
+        response = self.client.get("/api/stocks/portfolio/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Settings page", response.data["error"])
+
+    @patch("api.views.T212Client")
+    def test_auth_error_400(self, mock_cls):
+        mock_cls.return_value.get_positions.side_effect = T212AuthError()
+        response = self.client.get("/api/stocks/portfolio/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("api.views.T212Client")
+    def test_rate_limited_serves_stale_cache(self, mock_cls):
+        self._mock_client(mock_cls)
+        self.client.get("/api/stocks/portfolio/")
+
+        mock_cls.return_value.get_positions.side_effect = T212RateLimited()
+        response = self.client.get("/api/stocks/portfolio/?refresh=1")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["stale"])
+        self.assertIn("warning", response.data)
+
+    @patch("api.views.T212Client")
+    def test_rate_limited_without_cache_429(self, mock_cls):
+        mock_cls.return_value.get_positions.side_effect = T212RateLimited()
+        response = self.client.get("/api/stocks/portfolio/")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
 class CSVTests(APITestCase):

@@ -15,7 +15,13 @@ class UserSerializer(serializers.ModelSerializer):
 class SettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Settings
-        fields = ["dark_mode", "open_ai_api_key"]
+        fields = [
+            "dark_mode",
+            "open_ai_api_key",
+            "t212_api_key",
+            "t212_api_secret",
+            "t212_environment",
+        ]
         extra_kwargs = {"user": {"read_only": True}}
 
 class CategorySerializer(serializers.ModelSerializer):
