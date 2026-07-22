@@ -1,5 +1,8 @@
-from decimal import Decimal
+import csv
+import io
+from decimal import Decimal, InvalidOperation
 
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -8,6 +11,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser
 from .serializers import (
     BudgetSerializer,
     CategorySerializer,
@@ -284,6 +288,103 @@ class BudgetDetail(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Budget.objects.filter(user=self.request.user)
+
+
+CSV_COLUMNS = ["date", "name", "amount", "type", "category"]
+CSV_IMPORT_MAX_ROWS = 5000
+
+
+class ExportTransactionsCSV(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="transactions.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(CSV_COLUMNS)
+        transactions = (
+            Transaction.objects.filter(user=request.user)
+            .select_related("category")
+            .order_by("date", "id")
+        )
+        for t in transactions:
+            writer.writerow([t.date, t.name, t.amount, t.type, t.category.name])
+        return response
+
+
+class ImportTransactionsCSV(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"error": "No file uploaded."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            decoded = upload.read().decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return Response(
+                {"error": "File must be UTF-8 encoded CSV."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reader = csv.DictReader(io.StringIO(decoded))
+        missing = set(CSV_COLUMNS) - set(reader.fieldnames or [])
+        if missing:
+            return Response(
+                {"error": f"Missing columns: {', '.join(sorted(missing))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        created = 0
+        errors = []
+        for row_number, row in enumerate(reader, start=2):
+            if created + len(errors) >= CSV_IMPORT_MAX_ROWS:
+                errors.append(
+                    {
+                        "row": row_number,
+                        "error": f"Import capped at {CSV_IMPORT_MAX_ROWS} rows.",
+                    }
+                )
+                break
+            try:
+                tx_date = datetime.strptime(
+                    (row.get("date") or "").strip(), "%Y-%m-%d"
+                ).date()
+                amount = Decimal((row.get("amount") or "").strip())
+                if amount <= 0:
+                    raise ValueError("amount must be positive")
+                tx_type = (row.get("type") or "").strip().lower()
+                if tx_type not in ["expense", "income"]:
+                    raise ValueError("type must be expense or income")
+                name = (row.get("name") or "").strip()
+                category_name = (row.get("category") or "").strip()
+                if not name or not category_name:
+                    raise ValueError("name and category are required")
+            except (ValueError, InvalidOperation) as e:
+                errors.append({"row": row_number, "error": str(e)})
+                continue
+
+            category, _ = Category.objects.get_or_create(
+                user=request.user, name=category_name, type=tx_type
+            )
+            # Individual creates so balance signals fire
+            Transaction.objects.create(
+                user=request.user,
+                date=tx_date,
+                amount=amount,
+                name=name,
+                category=category,
+                type=tx_type,
+            )
+            created += 1
+
+        return Response({"created": created, "errors": errors})
 
 
 class RecurringListCreate(generics.ListCreateAPIView):

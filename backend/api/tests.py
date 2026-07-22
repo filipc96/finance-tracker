@@ -356,6 +356,77 @@ class RecurringTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class CSVTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.other = create_user("bob")
+        self.client.force_authenticate(self.user)
+        self.food = Category.objects.create(
+            user=self.user, name="Food", type="expense"
+        )
+
+    def _upload(self, content):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = SimpleUploadedFile(
+            "import.csv", content.encode("utf-8"), content_type="text/csv"
+        )
+        return self.client.post(
+            "/api/transactions/import/", {"file": file}, format="multipart"
+        )
+
+    def test_export_is_user_scoped_with_header(self):
+        create_transaction(self.user, self.food, "10.00", name="mine")
+        other_cat = Category.objects.create(
+            user=self.other, name="Other", type="expense"
+        )
+        create_transaction(self.other, other_cat, "99.00", name="bobs")
+
+        response = self.client.get("/api/transactions/export/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        content = response.content.decode()
+        self.assertIn("date,name,amount,type,category", content)
+        self.assertIn("mine", content)
+        self.assertNotIn("bobs", content)
+
+    def test_import_happy_path_creates_category_and_updates_balance(self):
+        response = self._upload(
+            "date,name,amount,type,category\n"
+            "2026-01-05,salary,1000.00,income,Salary\n"
+            "2026-01-10,groceries,50.00,expense,Food\n"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["created"], 2)
+        self.assertEqual(response.data["errors"], [])
+        self.assertTrue(
+            Category.objects.filter(
+                user=self.user, name="Salary", type="income"
+            ).exists()
+        )
+        self.user.account.refresh_from_db()
+        self.assertEqual(self.user.account.balance, Decimal("950.00"))
+
+    def test_import_reports_row_errors(self):
+        response = self._upload(
+            "date,name,amount,type,category\n"
+            "2026-01-05,ok,10.00,expense,Food\n"
+            "not-a-date,bad,10.00,expense,Food\n"
+            "2026-01-06,bad-amount,abc,expense,Food\n"
+            "2026-01-07,bad-type,10.00,transfer,Food\n"
+        )
+        self.assertEqual(response.data["created"], 1)
+        self.assertEqual(len(response.data["errors"]), 3)
+        self.assertEqual(response.data["errors"][0]["row"], 3)
+
+    def test_import_missing_column_rejected(self):
+        response = self._upload("date,name,amount\n2026-01-05,x,10.00\n")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_import_requires_file(self):
+        response = self.client.post("/api/transactions/import/", {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class ChatTests(APITestCase):
     def setUp(self):
         self.user = create_user("alice")

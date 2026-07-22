@@ -3,9 +3,10 @@ import RecurringManager from "../components/RecurringManager";
 import TransactionTable from "../components/TransactionsTable";
 import api from "../api";
 import toast from "react-hot-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const History = () => {
+  const fileInputRef = useRef(null);
   const [transactions, setTransactions] = useState([]);
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
@@ -43,6 +44,47 @@ const History = () => {
       .catch(() => toast.error("Failed to delete transaction."));
   };
 
+  const exportCSV = () => {
+    api
+      .get("/api/transactions/export/", { responseType: "blob" })
+      .then((res) => {
+        const url = URL.createObjectURL(res.data);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "transactions.csv";
+        link.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => toast.error("Failed to export transactions."));
+  };
+
+  const importCSV = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    api
+      .post("/api/transactions/import/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      .then((res) => {
+        const { created, errors } = res.data;
+        toast.success(`Imported ${created} transaction${created === 1 ? "" : "s"}.`);
+        if (errors.length > 0) {
+          toast.error(
+            `${errors.length} row${errors.length === 1 ? "" : "s"} skipped ` +
+              `(first: row ${errors[0].row} — ${errors[0].error})`
+          );
+        }
+        getTransactions(1);
+      })
+      .catch((error) =>
+        toast.error(error.response?.data?.error || "Failed to import CSV.")
+      );
+  };
+
   useEffect(() => {
     getTransactions(1);
   }, []);
@@ -60,6 +102,27 @@ const History = () => {
             type="income"
             callback={() => getTransactions()}
           ></AddTransaction>
+        </div>
+        <div className="w-full flex justify-end gap-3">
+          <button
+            onClick={exportCSV}
+            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            Import CSV
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={importCSV}
+            className="hidden"
+          />
         </div>
         <div className="w-full">
           <TransactionTable

@@ -51,6 +51,16 @@ urlpatterns = [
     path("chat/", views.ChatView.as_view(), name="chat"),
     path("budgets/", views.BudgetListCreate.as_view(), name="budget-list"),
     path("budgets/<int:pk>/", views.BudgetDetail.as_view(), name="budget-detail"),
+    path(
+        "transactions/export/",
+        views.ExportTransactionsCSV.as_view(),
+        name="transaction-export",
+    ),
+    path(
+        "transactions/import/",
+        views.ImportTransactionsCSV.as_view(),
+        name="transaction-import",
+    ),
     path("recurring/", views.RecurringListCreate.as_view(), name="recurring-list"),
     path(
         "recurring/delete/<int:pk>",
