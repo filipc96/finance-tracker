@@ -10,6 +10,12 @@ const Settings = () => {
   const { darkMode } = useTheme();
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [llmProvider, setLlmProvider] = useState("openai");
+  const [llmModel, setLlmModel] = useState("");
+  const [ollamaUrl, setOllamaUrl] = useState("");
+  const [lmstudioUrl, setLmstudioUrl] = useState("");
   const [showT212Key, setShowT212Key] = useState(false);
   const [showT212Secret, setShowT212Secret] = useState(false);
   const [t212Key, setT212Key] = useState("");
@@ -20,6 +26,11 @@ const Settings = () => {
   useEffect(() => {
     api.get("/api/settings/").then((response) => {
       setApiKey(response.data.open_ai_api_key || "");
+      setAnthropicKey(response.data.anthropic_api_key || "");
+      setLlmProvider(response.data.llm_provider || "openai");
+      setLlmModel(response.data.llm_model || "");
+      setOllamaUrl(response.data.ollama_base_url || "");
+      setLmstudioUrl(response.data.lmstudio_base_url || "");
       setT212Key(response.data.t212_api_key || "");
       setT212Secret(response.data.t212_api_secret || "");
       setT212Environment(response.data.t212_environment || "live");
@@ -32,6 +43,11 @@ const Settings = () => {
       await api.post("/api/settings/", {
         dark_mode: darkMode,
         open_ai_api_key: apiKey,
+        anthropic_api_key: anthropicKey,
+        llm_provider: llmProvider,
+        llm_model: llmModel,
+        ollama_base_url: ollamaUrl,
+        lmstudio_base_url: lmstudioUrl,
         t212_api_key: t212Key,
         t212_api_secret: t212Secret,
         t212_environment: t212Environment,
@@ -56,6 +72,108 @@ const Settings = () => {
       </div>
 
       <div className="flex flex-col space-y-4 p-6 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 max-w-md">
+        <span className="text-gray-700 dark:text-gray-200 font-semibold">
+          AI &amp; Chat
+        </span>
+        <div className="flex flex-col space-y-2">
+          <span className="text-gray-700 dark:text-gray-200">Provider</span>
+          <select
+            value={llmProvider}
+            onChange={(e) => {
+              setLlmProvider(e.target.value);
+              setLlmModel("");
+            }}
+            className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="ollama">Ollama (local)</option>
+            <option value="lmstudio">LM Studio (local)</option>
+          </select>
+        </div>
+        <div className="flex flex-col space-y-2">
+          <span className="text-gray-700 dark:text-gray-200">Model</span>
+          <input
+            type="text"
+            list="llm-model-options"
+            value={llmModel}
+            onChange={(e) => setLlmModel(e.target.value)}
+            placeholder={
+              llmProvider === "openai"
+                ? "gpt-5-mini (default)"
+                : llmProvider === "anthropic"
+                ? "claude-sonnet-4-6 (default)"
+                : "e.g. llama3, qwen2.5 — required for local"
+            }
+            className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <datalist id="llm-model-options">
+            {llmProvider === "openai" && (
+              <>
+                <option value="gpt-5-mini" />
+                <option value="gpt-4o-mini" />
+                <option value="gpt-4o" />
+              </>
+            )}
+            {llmProvider === "anthropic" && (
+              <>
+                <option value="claude-sonnet-4-6" />
+                <option value="claude-opus-4-6" />
+                <option value="claude-haiku-4-5" />
+              </>
+            )}
+          </datalist>
+        </div>
+        {llmProvider === "anthropic" && (
+          <div className="flex flex-col space-y-2">
+            <span className="text-gray-700 dark:text-gray-200">
+              Anthropic API Key
+            </span>
+            <div className="relative">
+              <input
+                type={showAnthropicKey ? "text" : "password"}
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="Enter your Anthropic API key"
+                className="w-full p-4 pr-10 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <button
+                onClick={() => setShowAnthropicKey(!showAnthropicKey)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                <FontAwesomeIcon icon={showAnthropicKey ? faEyeSlash : faEye} />
+              </button>
+            </div>
+          </div>
+        )}
+        {llmProvider === "ollama" && (
+          <div className="flex flex-col space-y-2">
+            <span className="text-gray-700 dark:text-gray-200">
+              Ollama Base URL
+            </span>
+            <input
+              type="text"
+              value={ollamaUrl}
+              onChange={(e) => setOllamaUrl(e.target.value)}
+              placeholder="http://localhost:11434/v1 (default)"
+              className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        )}
+        {llmProvider === "lmstudio" && (
+          <div className="flex flex-col space-y-2">
+            <span className="text-gray-700 dark:text-gray-200">
+              LM Studio Base URL
+            </span>
+            <input
+              type="text"
+              value={lmstudioUrl}
+              onChange={(e) => setLmstudioUrl(e.target.value)}
+              placeholder="http://localhost:1234/v1 (default)"
+              className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        )}
         <div className="flex flex-col space-y-2">
           <span className="text-gray-700 dark:text-gray-200">
             OpenAI API Key
