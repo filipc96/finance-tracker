@@ -20,7 +20,7 @@ class SettingsSerializer(serializers.ModelSerializer):
 
 class CategorySerializer(serializers.ModelSerializer):
     transactions_sum = serializers.DecimalField(
-        required=False, max_digits=20, decimal_places=2
+        read_only=True, max_digits=20, decimal_places=2
     )
 
     class Meta:

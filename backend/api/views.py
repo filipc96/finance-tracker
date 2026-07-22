@@ -1,13 +1,16 @@
+from decimal import Decimal
+
 from django.shortcuts import render
 from django.contrib.auth.models import User
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 from .serializers import SettingsSerializer, UserSerializer, TransactionSerializer, CategorySerializer
 from .models import Transaction, Category
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.db.models import Sum
-from django.db.models.functions import TruncMonth, TruncYear
+from django.db.models import Sum, Value
+from django.db.models.functions import TruncMonth, TruncYear, Coalesce
 from datetime import datetime, timedelta
 
 
@@ -22,9 +25,9 @@ class GetLatestExpense(APIView):
 
     def get(self, request):
         try:
-            latest_expense = Transaction.objects.filter(type="expense").latest(
-                "date_created"
-            )
+            latest_expense = Transaction.objects.filter(
+                user=request.user, type="expense"
+            ).latest("date_created")
             serializer = TransactionSerializer(latest_expense)
             return Response(serializer.data)
         except Transaction.DoesNotExist:
@@ -36,9 +39,9 @@ class GetLatestIncome(APIView):
 
     def get(self, request):
         try:
-            latest_income = Transaction.objects.filter(type="income").latest(
-                "date_created"
-            )
+            latest_income = Transaction.objects.filter(
+                user=request.user, type="income"
+            ).latest("date_created")
             serializer = TransactionSerializer(latest_income)
             return Response(serializer.data)
         except Transaction.DoesNotExist:
@@ -75,20 +78,24 @@ class SettingsListCreate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class TransactionPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class TransactionListCreate(generics.ListCreateAPIView):
 
     serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = TransactionPagination
 
     def get_queryset(self):
         user = self.request.user
-        return Transaction.objects.filter(user=user)
+        return Transaction.objects.filter(user=user).order_by("-date", "-id")
 
     def perform_create(self, serializer):
-        if serializer.is_valid():
-            serializer.save(user=self.request.user)
-        else:
-            print(serializer.errors)
+        serializer.save(user=self.request.user)
 
 
 class TransactionDelete(generics.DestroyAPIView):
@@ -107,13 +114,14 @@ class CategoryListCreate(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Category.objects.filter(user=user)
+        return Category.objects.filter(user=user).annotate(
+            transactions_sum=Coalesce(
+                Sum("transaction__amount"), Value(Decimal("0.00"))
+            )
+        )
 
     def perform_create(self, serializer):
-        if serializer.is_valid():
-            serializer.save(user=self.request.user)
-        else:
-            print(serializer.errors)
+        serializer.save(user=self.request.user)
 
 
 class CategoryDelete(generics.DestroyAPIView):
@@ -129,8 +137,8 @@ class GetMonthlyTransactionSum(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, year, transaction_type):
-        filtered = Transaction.objects.filter(date__year=year).filter(
-            type=transaction_type
+        filtered = Transaction.objects.filter(
+            user=request.user, date__year=year, type=transaction_type
         )
 
         monthly_sums = (
@@ -148,10 +156,12 @@ class GetMonthlyTransactionSum(APIView):
 
 
 class GetYearlyTransactionSum(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, transaction_type):
-        filtered = Transaction.objects.filter(type=transaction_type)
+        filtered = Transaction.objects.filter(
+            user=request.user, type=transaction_type
+        )
 
         yearly_sums = (
             filtered.annotate(year=TruncYear("date"))
@@ -159,7 +169,6 @@ class GetYearlyTransactionSum(APIView):
             .order_by("year")
             .annotate(sum_of_transactions=Sum("amount"))
         )
-        print(yearly_sums)
 
         yearly_sum_response = {}
 
@@ -170,17 +179,19 @@ class GetYearlyTransactionSum(APIView):
 
 
 class GetAllTimeTransactionSum(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, transaction_type):
-        filtered = Transaction.objects.filter(type=transaction_type)
+        filtered = Transaction.objects.filter(
+            user=request.user, type=transaction_type
+        )
 
         return Response(filtered.aggregate(total_sum=Sum("amount"))["total_sum"])
 
 
 class GetTransactionsByTimespan(APIView):
-    permission_classes = [AllowAny]
-    
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, timespan, transaction_type):
         if timespan not in [6, 12, 24]:
             return Response(
@@ -199,7 +210,9 @@ class GetTransactionsByTimespan(APIView):
         end_date = datetime.now()
         start_date = end_date - timedelta(days=timespan * 30)  
         transactions = Transaction.objects.filter(
-            type=transaction_type, date__range=[start_date, end_date]
+            user=request.user,
+            type=transaction_type,
+            date__range=[start_date, end_date],
         )
 
         grouped_data = (

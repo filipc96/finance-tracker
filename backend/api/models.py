@@ -29,7 +29,6 @@ class Settings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     dark_mode = models.BooleanField(default=False)
     open_ai_api_key = models.CharField(max_length=255, blank=True, null=True)
-    openai_key = models.CharField(max_length=255, blank=True)
 
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
@@ -56,11 +55,6 @@ class Category(models.Model):
 
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
-
-    @property
-    def transactions_sum(self):
-        total_amount = sum(self.transaction_set.all().values_list("amount", flat=True))
-        return total_amount
 
     def __str__(self):
         return self.name
