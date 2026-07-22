@@ -84,4 +84,19 @@ urlpatterns = [
         views.StocksPortfolio.as_view(),
         name="stocks-portfolio",
     ),
+    path(
+        "analytics/net-worth/",
+        views.NetWorthSeries.as_view(),
+        name="net-worth-series",
+    ),
+    path(
+        "analytics/monthly-summary/<int:year>/",
+        views.MonthlySummary.as_view(),
+        name="monthly-summary",
+    ),
+    path(
+        "analytics/category-trends/<str:transaction_type>/<int:months>/",
+        views.CategoryTrends.as_view(),
+        name="category-trends",
+    ),
 ]

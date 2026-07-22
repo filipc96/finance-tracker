@@ -5,8 +5,17 @@ from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from django.db import transaction as db_transaction
+from django.db.models import Sum
 
-from .models import RecurringTransaction, SavingsAccount, SavingsTransaction, Transaction
+from .models import (
+    Account,
+    NetWorthSnapshot,
+    PortfolioSnapshot,
+    RecurringTransaction,
+    SavingsAccount,
+    SavingsTransaction,
+    Transaction,
+)
 
 # Safety cap so a very old next_due can't loop forever (400 ≈ daily/13 months)
 MAX_MATERIALIZATIONS_PER_ITEM = 400
@@ -52,6 +61,37 @@ def process_recurring(user):
         item.save()
 
     return created
+
+
+def upsert_net_worth_snapshot(user):
+    """Record today's net worth from current balances and the cached
+    portfolio value (never calls Trading 212 — rate limits)."""
+    savings_total = (
+        SavingsAccount.objects.filter(user=user, active=True).aggregate(
+            total=Sum("balance")
+        )["total"]
+        or Decimal("0.00")
+    )
+    latest_portfolio = (
+        PortfolioSnapshot.objects.filter(user=user).order_by("-date").first()
+    )
+    portfolio_value = (
+        latest_portfolio.total_value if latest_portfolio else Decimal("0.00")
+    )
+
+    # Fresh query — user.account may be a stale cached relation (recurring
+    # materialization above can have just changed the balance)
+    account_balance = Account.objects.get(user=user).balance
+
+    NetWorthSnapshot.objects.update_or_create(
+        user=user,
+        date=date.today(),
+        defaults={
+            "account_balance": account_balance,
+            "savings_total": savings_total,
+            "portfolio_value": portfolio_value,
+        },
+    )
 
 
 def next_month_first(d):

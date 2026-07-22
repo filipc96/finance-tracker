@@ -137,6 +137,31 @@ class PortfolioSnapshot(models.Model):
         return f"{self.user.username} portfolio @ {self.date}"
 
 
+class NetWorthSnapshot(models.Model):
+    """Daily upsert of total net worth, written by the process-on-load hook."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField()
+    account_balance = models.DecimalField(max_digits=12, decimal_places=2)
+    savings_total = models.DecimalField(max_digits=12, decimal_places=2)
+    portfolio_value = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "date"],
+                name="unique_net_worth_snapshot_per_day",
+            )
+        ]
+
+    @property
+    def net_worth(self):
+        return self.account_balance + self.savings_total + self.portfolio_value
+
+    def __str__(self):
+        return f"{self.user.username} net worth @ {self.date}"
+
+
 class RecurringTransaction(models.Model):
 
     TYPE_CHOICES = [

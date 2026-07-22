@@ -13,6 +13,7 @@ from .models import (
     Account,
     Budget,
     Category,
+    NetWorthSnapshot,
     PortfolioSnapshot,
     RecurringTransaction,
     SavingsAccount,
@@ -358,6 +359,105 @@ class RecurringTests(APITestCase):
             },
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class AnalyticsTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.other = create_user("bob")
+        self.client.force_authenticate(self.user)
+        self.food = Category.objects.create(
+            user=self.user, name="Food", type="expense"
+        )
+        self.salary = Category.objects.create(
+            user=self.user, name="Salary", type="income"
+        )
+
+    def test_monthly_summary_sums_and_net(self):
+        create_transaction(self.user, self.salary, "1000.00", date="2026-03-05")
+        create_transaction(self.user, self.food, "400.00", date="2026-03-10")
+        other_cat = Category.objects.create(
+            user=self.other, name="Other", type="expense"
+        )
+        create_transaction(self.other, other_cat, "999.00", date="2026-03-15")
+
+        response = self.client.get("/api/analytics/monthly-summary/2026/")
+        self.assertEqual(response.data["income"][2], Decimal("1000.00"))
+        self.assertEqual(response.data["expense"][2], Decimal("400.00"))
+        self.assertEqual(response.data["net"][2], Decimal("600.00"))
+
+    def test_monthly_summary_empty_year_zeros(self):
+        response = self.client.get("/api/analytics/monthly-summary/2020/")
+        self.assertEqual(response.data["income"], [Decimal("0.00")] * 12)
+        self.assertEqual(response.data["net"], [Decimal("0.00")] * 12)
+
+    def test_category_trends_pivot_and_zero_fill(self):
+        today = date.today()
+        create_transaction(
+            self.user, self.food, "30.00", date=str(today.replace(day=5))
+        )
+        response = self.client.get("/api/analytics/category-trends/expense/6/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        current_label = today.strftime("%Y-%m")
+        self.assertIn(current_label, response.data["months"])
+        food_series = next(
+            c for c in response.data["categories"] if c["name"] == "Food"
+        )
+        index = response.data["months"].index(current_label)
+        self.assertEqual(food_series["data"][index], Decimal("30.00"))
+        # All other months zero-filled
+        self.assertTrue(
+            all(
+                value == Decimal("0.00")
+                for i, value in enumerate(food_series["data"])
+                if i != index
+            )
+        )
+
+    def test_category_trends_validation(self):
+        self.assertEqual(
+            self.client.get("/api/analytics/category-trends/transfer/6/").status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            self.client.get("/api/analytics/category-trends/expense/7/").status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_process_upserts_single_net_worth_snapshot(self):
+        self.client.post("/api/process/")
+        self.client.post("/api/process/")
+        snapshots = NetWorthSnapshot.objects.filter(user=self.user)
+        self.assertEqual(snapshots.count(), 1)
+
+    def test_net_worth_series_combines_components(self):
+        SavingsAccount.objects.create(
+            user=self.user,
+            name="Fund",
+            balance=Decimal("500.00"),
+            apy_rate=Decimal("0.00"),
+            last_interest_date=date.today(),
+        )
+        create_transaction(self.user, self.salary, "100.00")
+        self.client.post("/api/process/")
+
+        response = self.client.get("/api/analytics/net-worth/")
+        self.assertEqual(len(response.data), 1)
+        entry = response.data[0]
+        self.assertEqual(entry["account_balance"], Decimal("100.00"))
+        self.assertEqual(entry["savings_total"], Decimal("500.00"))
+        self.assertEqual(entry["net_worth"], Decimal("600.00"))
+
+    def test_net_worth_series_user_scoped(self):
+        NetWorthSnapshot.objects.create(
+            user=self.other,
+            date=date.today(),
+            account_balance=Decimal("9999.00"),
+            savings_total=Decimal("0.00"),
+            portfolio_value=Decimal("0.00"),
+        )
+        response = self.client.get("/api/analytics/net-worth/")
+        self.assertEqual(response.data, [])
 
 
 class SavingsTests(APITestCase):

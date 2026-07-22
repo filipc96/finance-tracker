@@ -25,13 +25,18 @@ from .serializers import (
 from .models import (
     Budget,
     Category,
+    NetWorthSnapshot,
     PortfolioSnapshot,
     RecurringTransaction,
     SavingsAccount,
     SavingsTransaction,
     Transaction,
 )
-from .services import process_recurring, process_savings_interest
+from .services import (
+    process_recurring,
+    process_savings_interest,
+    upsert_net_worth_snapshot,
+)
 from django.db import transaction as db_transaction
 from django.shortcuts import get_object_or_404
 from .t212 import T212AuthError, T212Client, T212Error, T212RateLimited
@@ -441,6 +446,122 @@ class StocksPortfolio(APIView):
         return Response(serialize_snapshot(snapshot))
 
 
+class NetWorthSeries(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            months = int(request.query_params.get("months", 12))
+        except ValueError:
+            months = 12
+        months = max(1, min(months, 60))
+
+        start = (datetime.now().date() - timedelta(days=months * 31)).replace(
+            day=1
+        )
+        snapshots = NetWorthSnapshot.objects.filter(
+            user=request.user, date__gte=start
+        ).order_by("date")
+
+        # Keep the latest snapshot of each calendar month
+        by_month = {}
+        for snap in snapshots:
+            by_month[snap.date.strftime("%Y-%m")] = snap
+
+        return Response(
+            [
+                {
+                    "date": month,
+                    "account_balance": snap.account_balance,
+                    "savings_total": snap.savings_total,
+                    "portfolio_value": snap.portfolio_value,
+                    "net_worth": snap.net_worth,
+                }
+                for month, snap in sorted(by_month.items())
+            ]
+        )
+
+
+class MonthlySummary(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, year):
+        rows = (
+            Transaction.objects.filter(user=request.user, date__year=year)
+            .annotate(month=TruncMonth("date"))
+            .values("month", "type")
+            .annotate(total=Sum("amount"))
+        )
+
+        income = [Decimal("0.00")] * 12
+        expense = [Decimal("0.00")] * 12
+        for row in rows:
+            index = row["month"].month - 1
+            if row["type"] == "income":
+                income[index] = row["total"]
+            elif row["type"] == "expense":
+                expense[index] = row["total"]
+
+        net = [income[i] - expense[i] for i in range(12)]
+        return Response({"income": income, "expense": expense, "net": net})
+
+
+class CategoryTrends(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, transaction_type, months):
+        if transaction_type not in ["expense", "income"]:
+            return Response(
+                {"error": "Invalid transaction type. Use 'expense' or 'income'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if months not in [6, 12, 24]:
+            return Response(
+                {"error": "Invalid timespan. Use 6, 12, or 24 (months)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = datetime.now().date()
+        start = (today - timedelta(days=months * 31)).replace(day=1)
+
+        rows = (
+            Transaction.objects.filter(
+                user=request.user, type=transaction_type, date__gte=start
+            )
+            .annotate(month=TruncMonth("date"))
+            .values("month", "category__name")
+            .annotate(total=Sum("amount"))
+            .order_by("month")
+        )
+
+        month_labels = []
+        cursor = start
+        while cursor <= today:
+            month_labels.append(cursor.strftime("%Y-%m"))
+            cursor = (cursor + timedelta(days=32)).replace(day=1)
+
+        month_index = {label: i for i, label in enumerate(month_labels)}
+        categories = {}
+        for row in rows:
+            label = row["month"].strftime("%Y-%m")
+            if label not in month_index:
+                continue
+            name = row["category__name"]
+            if name not in categories:
+                categories[name] = [Decimal("0.00")] * len(month_labels)
+            categories[name][month_index[label]] = row["total"]
+
+        return Response(
+            {
+                "months": month_labels,
+                "categories": [
+                    {"name": name, "data": data}
+                    for name, data in sorted(categories.items())
+                ],
+            }
+        )
+
+
 CSV_COLUMNS = ["date", "name", "amount", "type", "category"]
 CSV_IMPORT_MAX_ROWS = 5000
 
@@ -652,6 +773,7 @@ class ProcessOnLoad(APIView):
     def post(self, request):
         created = process_recurring(request.user)
         interest_posted = process_savings_interest(request.user)
+        upsert_net_worth_snapshot(request.user)
         return Response(
             {
                 "recurring_created": created,
