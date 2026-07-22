@@ -1,26 +1,27 @@
 import ToggleButton from "../components/ToggleButton";
 import { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import { Link } from "react-router-dom";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../api";
 import toast from "react-hot-toast";
+import Card from "../components/ui/Card";
+import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
+import PasswordInput from "../components/ui/PasswordInput";
+import Button from "../components/ui/Button";
 
 const Settings = () => {
   const { darkMode } = useTheme();
-  const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
   const [anthropicKey, setAnthropicKey] = useState("");
   const [llmProvider, setLlmProvider] = useState("openai");
   const [llmModel, setLlmModel] = useState("");
   const [ollamaUrl, setOllamaUrl] = useState("");
   const [lmstudioUrl, setLmstudioUrl] = useState("");
-  const [showT212Key, setShowT212Key] = useState(false);
-  const [showT212Secret, setShowT212Secret] = useState(false);
   const [t212Key, setT212Key] = useState("");
   const [t212Secret, setT212Secret] = useState("");
   const [t212Environment, setT212Environment] = useState("live");
+  const [username, setUsername] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -35,6 +36,10 @@ const Settings = () => {
       setT212Secret(response.data.t212_api_secret || "");
       setT212Environment(response.data.t212_environment || "live");
     });
+    api
+      .get("/api/user/")
+      .then((res) => setUsername(res.data.username))
+      .catch(() => {});
   }, []);
 
   const handleSaveSettings = async () => {
@@ -60,202 +65,164 @@ const Settings = () => {
     }
   };
 
-  return (
-    <div className="flex flex-col space-y-6">
-      <h2 className="text-2xl font-bold dark:text-white">Settings</h2>
+  const modelPlaceholder =
+    llmProvider === "openai"
+      ? "gpt-5-mini (default)"
+      : llmProvider === "anthropic"
+      ? "claude-sonnet-4-6 (default)"
+      : "e.g. llama3, qwen2.5 — required for local providers";
 
-      <div className="flex flex-col space-y-4 p-6 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 max-w-md">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-700 dark:text-gray-200">Dark Mode</span>
+  return (
+    <div className="flex flex-col gap-6 max-w-2xl pb-10">
+      <h2>Settings</h2>
+
+      <Card
+        title="Appearance"
+        description="How the app looks on this device."
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            Dark Mode
+          </span>
           <ToggleButton />
         </div>
-      </div>
+      </Card>
 
-      <div className="flex flex-col space-y-4 p-6 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 max-w-md">
-        <span className="text-gray-700 dark:text-gray-200 font-semibold">
-          AI &amp; Chat
-        </span>
-        <div className="flex flex-col space-y-2">
-          <span className="text-gray-700 dark:text-gray-200">Provider</span>
-          <select
-            value={llmProvider}
-            onChange={(e) => {
-              setLlmProvider(e.target.value);
-              setLlmModel("");
-            }}
-            className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="ollama">Ollama (local)</option>
-            <option value="lmstudio">LM Studio (local)</option>
-          </select>
-        </div>
-        <div className="flex flex-col space-y-2">
-          <span className="text-gray-700 dark:text-gray-200">Model</span>
-          <input
-            type="text"
-            list="llm-model-options"
-            value={llmModel}
-            onChange={(e) => setLlmModel(e.target.value)}
-            placeholder={
-              llmProvider === "openai"
-                ? "gpt-5-mini (default)"
-                : llmProvider === "anthropic"
-                ? "claude-sonnet-4-6 (default)"
-                : "e.g. llama3, qwen2.5 — required for local"
-            }
-            className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <datalist id="llm-model-options">
-            {llmProvider === "openai" && (
-              <>
-                <option value="gpt-5-mini" />
-                <option value="gpt-4o-mini" />
-                <option value="gpt-4o" />
-              </>
-            )}
-            {llmProvider === "anthropic" && (
-              <>
-                <option value="claude-sonnet-4-6" />
-                <option value="claude-opus-4-6" />
-                <option value="claude-haiku-4-5" />
-              </>
-            )}
-          </datalist>
-        </div>
-        {llmProvider === "anthropic" && (
-          <div className="flex flex-col space-y-2">
-            <span className="text-gray-700 dark:text-gray-200">
-              Anthropic API Key
-            </span>
-            <div className="relative">
-              <input
-                type={showAnthropicKey ? "text" : "password"}
-                value={anthropicKey}
-                onChange={(e) => setAnthropicKey(e.target.value)}
-                placeholder="Enter your Anthropic API key"
-                className="w-full p-4 pr-10 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                onClick={() => setShowAnthropicKey(!showAnthropicKey)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                <FontAwesomeIcon icon={showAnthropicKey ? faEyeSlash : faEye} />
-              </button>
-            </div>
+      <Card
+        title="AI & Chat"
+        description="Provider and model used by the financial assistant. Local providers (Ollama, LM Studio) need no API key."
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              label="Provider"
+              value={llmProvider}
+              onChange={(e) => {
+                setLlmProvider(e.target.value);
+                setLlmModel("");
+              }}
+            >
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="ollama">Ollama (local)</option>
+              <option value="lmstudio">LM Studio (local)</option>
+            </Select>
+            <Input
+              label="Model"
+              type="text"
+              list="llm-model-options"
+              value={llmModel}
+              onChange={(e) => setLlmModel(e.target.value)}
+              placeholder={modelPlaceholder}
+            />
+            <datalist id="llm-model-options">
+              {llmProvider === "openai" && (
+                <>
+                  <option value="gpt-5-mini" />
+                  <option value="gpt-4o-mini" />
+                  <option value="gpt-4o" />
+                </>
+              )}
+              {llmProvider === "anthropic" && (
+                <>
+                  <option value="claude-sonnet-4-6" />
+                  <option value="claude-opus-4-6" />
+                  <option value="claude-haiku-4-5" />
+                </>
+              )}
+            </datalist>
           </div>
-        )}
-        {llmProvider === "ollama" && (
-          <div className="flex flex-col space-y-2">
-            <span className="text-gray-700 dark:text-gray-200">
-              Ollama Base URL
-            </span>
-            <input
+
+          {llmProvider === "openai" && (
+            <PasswordInput
+              label="OpenAI API Key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Enter your OpenAI API key"
+            />
+          )}
+          {llmProvider === "anthropic" && (
+            <PasswordInput
+              label="Anthropic API Key"
+              value={anthropicKey}
+              onChange={(e) => setAnthropicKey(e.target.value)}
+              placeholder="Enter your Anthropic API key"
+            />
+          )}
+          {llmProvider === "ollama" && (
+            <Input
+              label="Ollama Base URL"
               type="text"
               value={ollamaUrl}
               onChange={(e) => setOllamaUrl(e.target.value)}
               placeholder="http://localhost:11434/v1 (default)"
-              className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-        )}
-        {llmProvider === "lmstudio" && (
-          <div className="flex flex-col space-y-2">
-            <span className="text-gray-700 dark:text-gray-200">
-              LM Studio Base URL
-            </span>
-            <input
+          )}
+          {llmProvider === "lmstudio" && (
+            <Input
+              label="LM Studio Base URL"
               type="text"
               value={lmstudioUrl}
               onChange={(e) => setLmstudioUrl(e.target.value)}
               placeholder="http://localhost:1234/v1 (default)"
-              className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-        )}
-        <div className="flex flex-col space-y-2">
-          <span className="text-gray-700 dark:text-gray-200">
-            OpenAI API Key
-          </span>
-          <div className="relative">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your OpenAI API key"
-              className="w-full p-4 pr-10 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              <FontAwesomeIcon icon={showApiKey ? faEyeSlash : faEye} />
-            </button>
-          </div>
+          )}
         </div>
-      </div>
+      </Card>
 
-      <div className="flex flex-col space-y-4 p-6 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 max-w-md">
-        <span className="text-gray-700 dark:text-gray-200 font-semibold">
-          Trading 212
-        </span>
-        <div className="flex flex-col space-y-2">
-          <span className="text-gray-700 dark:text-gray-200">API Key</span>
-          <div className="relative">
-            <input
-              type={showT212Key ? "text" : "password"}
-              value={t212Key}
-              onChange={(e) => setT212Key(e.target.value)}
-              placeholder="Enter your Trading 212 API key"
-              className="w-full p-4 pr-10 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              onClick={() => setShowT212Key(!showT212Key)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              <FontAwesomeIcon icon={showT212Key ? faEyeSlash : faEye} />
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-col space-y-2">
-          <span className="text-gray-700 dark:text-gray-200">API Secret</span>
-          <div className="relative">
-            <input
-              type={showT212Secret ? "text" : "password"}
-              value={t212Secret}
-              onChange={(e) => setT212Secret(e.target.value)}
-              placeholder="Enter your Trading 212 API secret"
-              className="w-full p-4 pr-10 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              onClick={() => setShowT212Secret(!showT212Secret)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            >
-              <FontAwesomeIcon icon={showT212Secret ? faEyeSlash : faEye} />
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-col space-y-2">
-          <span className="text-gray-700 dark:text-gray-200">Environment</span>
-          <select
+      <Card
+        title="Trading 212"
+        description="API credentials for portfolio sync. Generate them in the Trading 212 app under Settings → API."
+      >
+        <div className="flex flex-col gap-4">
+          <PasswordInput
+            label="API Key"
+            value={t212Key}
+            onChange={(e) => setT212Key(e.target.value)}
+            placeholder="Enter your Trading 212 API key"
+          />
+          <PasswordInput
+            label="API Secret"
+            value={t212Secret}
+            onChange={(e) => setT212Secret(e.target.value)}
+            placeholder="Enter your Trading 212 API secret"
+          />
+          <Select
+            label="Environment"
             value={t212Environment}
             onChange={(e) => setT212Environment(e.target.value)}
-            className="w-full p-4 rounded-lg border dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="live">Live</option>
             <option value="demo">Demo (paper trading)</option>
-          </select>
+          </Select>
         </div>
-      </div>
+      </Card>
 
-      <button
+      <Card title="Account" description="Profile and security.">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Signed in as
+            </div>
+            <div className="font-medium text-gray-900 dark:text-gray-100">
+              {username || "…"}
+            </div>
+          </div>
+          <Link to="/myaccount">
+            <Button variant="ghost" size="sm">
+              Manage account
+            </Button>
+          </Link>
+        </div>
+      </Card>
+
+      <Button
         onClick={handleSaveSettings}
-        disabled={isSaving}
-        className="w-full max-w-md p-4 bg-black text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+        isLoading={isSaving}
+        className="w-full"
       >
-        {isSaving ? "Saving..." : "Save Settings"}
-      </button>
+        Save Settings
+      </Button>
     </div>
   );
 };
