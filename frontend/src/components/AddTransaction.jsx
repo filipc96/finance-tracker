@@ -5,13 +5,17 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import DateInputBox from "./DateInputBox";
 import { format } from "date-fns";
+import Input from "./ui/Input";
+import Select from "./ui/Select";
+import Button from "./ui/Button";
 
 const AddTransaction = ({ type, callback }) => {
   const [categories, setCategories] = useState([]);
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState("");
-  const [amount, setAmount] = useState(0);
+  const [amount, setAmount] = useState("");
   const [name, setName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     api
@@ -20,21 +24,20 @@ const AddTransaction = ({ type, callback }) => {
       .catch(() => toast.error("Failed to load categories."));
   }, []);
 
-  const getCategories = categories
+  const categoryOptions = categories
     .filter((category) => category.type === type)
-    .map((category) => {
-      return (
-        <option key={category.id} value={category.id}>
-          {category.name}
-        </option>
-      );
-    });
+    .map((category) => (
+      <option key={category.id} value={category.id}>
+        {category.name}
+      </option>
+    ));
 
   const addTransaction = (e) => {
     e.preventDefault();
 
     if (date && name && amount && category) {
       const formattedDate = format(date, "yyyy-MM-dd");
+      setIsSaving(true);
       api
         .post("/api/transactions/", {
           name: name,
@@ -45,96 +48,71 @@ const AddTransaction = ({ type, callback }) => {
         })
         .then(() => {
           toast.success(`${type === "expense" ? "Expense" : "Income"} added.`);
+          setName("");
+          setAmount("");
           if (callback) callback();
         })
-        .catch(() => toast.error("Failed to add transaction."));
+        .catch(() => toast.error("Failed to add transaction."))
+        .finally(() => setIsSaving(false));
     } else {
       toast.error("You can't leave the fields empty!");
     }
   };
-  return (
-    <div
-      className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-8 justify-center items-center`}
-    >
-      <form onSubmit={addTransaction}>
-        <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
-          <h2>Add {type == "expense" ? "Expense" : "Income"}</h2>
-          <div className="sm:col-span-2">
-            <label
-              htmlFor="name"
-              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-            >
-              Short Description
-            </label>
-            <input
-              type="text"
-              name="name"
-              id="name"
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-              placeholder="Type short description"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
 
-          <div className="w-full">
-            <label
-              htmlFor="price"
-              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-            >
-              Amount
-            </label>
-            <input
-              type="number"
-              name="price"
-              id="price"
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-              placeholder="$1000"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="category"
-              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-            >
-              Category
-            </label>
-            <select
-              id="category"
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              <option defaultValue="">Select category</option>
-              {getCategories}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label
-              htmlFor="name"
-              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-            >
-              Date{" "}
-            </label>
-            <DatePicker
-              selected={date}
-              onChange={(date) => setDate(date)}
-              customInput={<DateInputBox />}
-            />
-          </div>
+  return (
+    <div className="flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-6">
+      <form onSubmit={addTransaction} className="flex flex-col gap-4">
+        <h3>Add {type === "expense" ? "Expense" : "Income"}</h3>
+
+        <Input
+          label="Short Description"
+          type="text"
+          placeholder="Type short description"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Amount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="1000"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+          />
+          <Select
+            label="Category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="">Select category</option>
+            {categoryOptions}
+          </Select>
         </div>
 
-        <button
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            Date
+          </label>
+          <DatePicker
+            selected={date}
+            onChange={(date) => setDate(date)}
+            customInput={<DateInputBox />}
+          />
+        </div>
+
+        <Button
           type="submit"
-          value="Submit"
-          className="w-full mt-5 bg-black text-white p-2 rounded-lg hover:bg-white hover:text-black hover:border hover:border-gray-300"
+          variant="secondary"
+          isLoading={isSaving}
+          className="w-full mt-1"
         >
           Add {type === "expense" ? "Expense" : "Income"}
-        </button>
+        </Button>
       </form>
     </div>
   );

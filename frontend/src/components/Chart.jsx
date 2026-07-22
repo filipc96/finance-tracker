@@ -79,12 +79,7 @@ const Chart = ({ type }) => {
     ],
   };
 
-  return (
-    <>
-      {type === "expense" ? "Expenses Graph" : "Incomes Graph"}
-      <Line options={options} data={data} />
-    </>
-  );
+  return <Line options={options} data={data} />;
 };
 
 export default Chart;

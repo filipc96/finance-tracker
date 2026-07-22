@@ -1,77 +1,65 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
+import Input from "./ui/Input";
+import Select from "./ui/Select";
+import Button from "./ui/Button";
 
 const AddCategory = ({ callback }) => {
   const [categoryName, setCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const addCategory = (e) => {
     e.preventDefault();
     if (categoryName && categoryType) {
+      setIsSaving(true);
       api
         .post("/api/categories/", { name: categoryName, type: categoryType })
         .then(() => {
           toast.success("Category created.");
+          setCategoryName("");
           if (callback) callback();
         })
-        .catch(() => toast.error("Failed to create category."));
+        .catch(() => toast.error("Failed to create category."))
+        .finally(() => setIsSaving(false));
     } else {
       toast.error("You can't leave the category name or type empty!");
     }
   };
 
   return (
-    <div
-      className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-8 justify-center`}
-    >
-      <form onSubmit={addCategory}>
-        <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
-          <h2>Add Category</h2>
-          <div className="sm:col-span-2">
-            <label
-              htmlFor="name"
-              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-            >
-              Category Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              id="name"
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-              placeholder="Type category name"
-              required
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label
-              htmlFor="category"
-              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-            >
-              Category Type
-            </label>
-            <select
-              id="category"
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-              onChange={(e) => setCategoryType(e.target.value)}
-            >
-              <option defaultValue="">Select category type</option>
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-            </select>
-          </div>
-        </div>
+    <div className="flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-6">
+      <form onSubmit={addCategory} className="flex flex-col gap-4">
+        <h3>Add Category</h3>
 
-        <button
-          type="submit"
-          value="Submit"
-          className="w-full mt-5 bg-black text-white p-2 rounded-lg hover:bg-white hover:text-black hover:border hover:border-gray-300"
+        <Input
+          label="Category Name"
+          type="text"
+          placeholder="Type category name"
+          required
+          value={categoryName}
+          onChange={(e) => setCategoryName(e.target.value)}
+        />
+
+        <Select
+          label="Category Type"
+          value={categoryType}
+          onChange={(e) => setCategoryType(e.target.value)}
         >
-          Add Category{" "}
-        </button>
+          <option value="">Select category type</option>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </Select>
+
+        <Button
+          type="submit"
+          variant="secondary"
+          isLoading={isSaving}
+          className="w-full mt-1"
+        >
+          Add Category
+        </Button>
       </form>
     </div>
   );
