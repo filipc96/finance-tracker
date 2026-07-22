@@ -92,7 +92,7 @@ const Terminal = ({ isOpen, setIsOpen }) => {
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {isOpen && (
-        <div className="absolute bottom-16 right-0 w-[32rem] h-80 bg-gray-900 text-gray-100 rounded-lg shadow-2xl overflow-hidden border border-gray-700">
+        <div className="absolute bottom-16 right-0 w-[min(32rem,calc(100vw-2rem))] h-80 bg-gray-900 text-gray-100 rounded-lg shadow-2xl overflow-hidden border border-gray-700">
           <div className="flex flex-col h-full">
             <div className="bg-gray-800 px-4 py-3 flex items-center justify-between border-b border-gray-700">
               <span className="text-sm font-semibold text-gray-300">

@@ -26,7 +26,7 @@ const NavigationBar = ({ menuItems }) => {
         </div>
       </div>
 
-      <nav className="mt-6 md:mt-10 ms-2 flex flex-col space-y-6 md:space-y-8 flex-grow overflow-y-auto">
+      <nav className="mt-4 flex flex-col space-y-1 flex-grow overflow-y-auto">
         {getNavigationItems}
       </nav>
     </div>

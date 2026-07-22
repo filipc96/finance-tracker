@@ -54,7 +54,7 @@ const AddTransaction = ({ type, callback }) => {
   };
   return (
     <div
-      className={`flex flex-col rounded-md border w-96 h-auto p-8 justify-center items-center`}
+      className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-8 justify-center items-center`}
     >
       <form onSubmit={addTransaction}>
         <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">

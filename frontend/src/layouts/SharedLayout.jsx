@@ -116,7 +116,7 @@ const SharedLayout = ({ menuItems }) => {
         ${isMobileMenuOpen && isMobile ? "blur-sm" : ""}
       `}
       >
-        <div className="flex flex-col py-10 px-4 md:px-16 h-screen overflow-y-auto w-full">
+        <div className="flex flex-col py-8 px-4 sm:px-6 md:px-10 lg:px-16 h-screen overflow-y-auto w-full">
           <Outlet />
         </div>
       </main>
