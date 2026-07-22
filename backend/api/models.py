@@ -81,6 +81,27 @@ class Transaction(models.Model):
         return f"{self.date} - {self.name}"
 
 
+class Budget(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    month = models.DateField()  # always normalized to the 1st of the month
+
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "category", "month"],
+                name="unique_budget_per_category_month",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.category.name} - {self.month:%Y-%m}"
+
+
 @receiver(post_save, sender=Transaction)
 def update_balance_post_save(sender, instance, created, **kwargs):
     if created:

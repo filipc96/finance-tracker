@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Category, Transaction, Settings
+from .models import Budget, Category, Transaction, Settings
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -27,6 +27,46 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ["id", "name", "type", "transactions_sum"]
         extra_kwargs = {"user": {"read_only": True}}
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    spent = serializers.DecimalField(
+        max_digits=20, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = Budget
+        fields = ["id", "category", "category_name", "amount", "month", "spent"]
+        extra_kwargs = {"user": {"read_only": True}}
+
+    def validate_category(self, category):
+        request = self.context["request"]
+        if category.user != request.user:
+            raise serializers.ValidationError("Category not found.")
+        if category.type != "expense":
+            raise serializers.ValidationError(
+                "Budgets can only be set for expense categories."
+            )
+        return category
+
+    def validate_month(self, month):
+        return month.replace(day=1)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        category = attrs.get("category") or (self.instance and self.instance.category)
+        month = attrs.get("month") or (self.instance and self.instance.month)
+        existing = Budget.objects.filter(
+            user=request.user, category=category, month=month
+        )
+        if self.instance:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "A budget for this category and month already exists."
+            )
+        return attrs
 
 
 class TransactionSerializer(serializers.ModelSerializer):

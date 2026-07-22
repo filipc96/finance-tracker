@@ -15,7 +15,9 @@ import {
   faHistory,
   faCalendar,
   faSignOut,
+  faWallet,
 } from "@fortawesome/free-solid-svg-icons";
+import Budgets from "./pages/Budgets";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -61,6 +63,12 @@ const menuItems = [
     icon: faHistory,
     path: "/history",
     element: <History />,
+  },
+  {
+    name: "Budgets",
+    icon: faWallet,
+    path: "/budgets",
+    element: <Budgets />,
   },
   {
     name: "Log Out",

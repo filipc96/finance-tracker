@@ -8,10 +8,16 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
-from .serializers import SettingsSerializer, UserSerializer, TransactionSerializer, CategorySerializer
-from .models import Transaction, Category
+from .serializers import (
+    BudgetSerializer,
+    CategorySerializer,
+    SettingsSerializer,
+    TransactionSerializer,
+    UserSerializer,
+)
+from .models import Budget, Transaction, Category
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.db.models import Sum, Value
+from django.db.models import Q, Sum, Value
 from django.db.models.functions import TruncMonth, TruncYear, Coalesce
 from datetime import datetime, timedelta
 from openai import OpenAI, OpenAIError, AuthenticationError, RateLimitError
@@ -222,6 +228,60 @@ class GetAllTimeTransactionSum(APIView):
         )
 
         return Response(filtered.aggregate(total_sum=Sum("amount"))["total_sum"])
+
+
+def budget_month_bounds(month):
+    """(first day of month, first day of next month) for a normalized month."""
+    if month.month == 12:
+        return month, month.replace(year=month.year + 1, month=1)
+    return month, month.replace(month=month.month + 1)
+
+
+class BudgetListCreate(generics.ListCreateAPIView):
+    serializer_class = BudgetSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_month(self):
+        month_param = self.request.query_params.get("month")
+        if month_param:
+            try:
+                return datetime.strptime(month_param, "%Y-%m").date()
+            except ValueError:
+                pass
+        return datetime.now().date().replace(day=1)
+
+    def get_queryset(self):
+        user = self.request.user
+        month = self.get_month()
+        start, end = budget_month_bounds(month)
+        return (
+            Budget.objects.filter(user=user, month=month)
+            .select_related("category")
+            .annotate(
+                spent=Coalesce(
+                    Sum(
+                        "category__transaction__amount",
+                        filter=Q(
+                            category__transaction__user=user,
+                            category__transaction__date__gte=start,
+                            category__transaction__date__lt=end,
+                        ),
+                    ),
+                    Value(Decimal("0.00")),
+                )
+            )
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class BudgetDetail(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BudgetSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Budget.objects.filter(user=self.request.user)
 
 
 def build_financial_context(user):

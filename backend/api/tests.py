@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Account, Category, Settings, Transaction
+from .models import Account, Budget, Category, Settings, Transaction
 
 
 def create_user(username="alice", password="test-pass-123"):
@@ -177,6 +177,100 @@ class AggregateIsolationTests(APITestCase):
             self.assertEqual(
                 response.status_code, status.HTTP_401_UNAUTHORIZED, url
             )
+
+
+class BudgetTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.other = create_user("bob")
+        self.client.force_authenticate(self.user)
+        self.food = Category.objects.create(
+            user=self.user, name="Food", type="expense"
+        )
+        self.salary = Category.objects.create(
+            user=self.user, name="Salary", type="income"
+        )
+
+    def test_create_normalizes_month(self):
+        response = self.client.post(
+            "/api/budgets/",
+            {"category": self.food.id, "amount": "500.00", "month": "2026-07-15"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["month"], "2026-07-01")
+
+    def test_income_category_rejected(self):
+        response = self.client.post(
+            "/api/budgets/",
+            {"category": self.salary.id, "amount": "500.00", "month": "2026-07-01"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_other_users_category_rejected(self):
+        other_cat = Category.objects.create(
+            user=self.other, name="Other", type="expense"
+        )
+        response = self.client.post(
+            "/api/budgets/",
+            {"category": other_cat.id, "amount": "500.00", "month": "2026-07-01"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_duplicate_budget_rejected(self):
+        Budget.objects.create(
+            user=self.user,
+            category=self.food,
+            amount=Decimal("500.00"),
+            month="2026-07-01",
+        )
+        response = self.client.post(
+            "/api/budgets/",
+            {"category": self.food.id, "amount": "300.00", "month": "2026-07-01"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_spent_annotation_scoped_to_month_and_user(self):
+        Budget.objects.create(
+            user=self.user,
+            category=self.food,
+            amount=Decimal("500.00"),
+            month="2026-07-01",
+        )
+        create_transaction(self.user, self.food, "50.00", date="2026-07-10")
+        create_transaction(self.user, self.food, "25.00", date="2026-07-20")
+        # Different month + other user must not count
+        create_transaction(self.user, self.food, "99.00", date="2026-06-10")
+        other_cat = Category.objects.create(
+            user=self.other, name="Food", type="expense"
+        )
+        create_transaction(self.other, other_cat, "1000.00", date="2026-07-10")
+
+        response = self.client.get("/api/budgets/?month=2026-07")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["spent"], "75.00")
+
+    def test_month_filter_returns_only_that_month(self):
+        Budget.objects.create(
+            user=self.user,
+            category=self.food,
+            amount=Decimal("500.00"),
+            month="2026-07-01",
+        )
+        response = self.client.get("/api/budgets/?month=2026-06")
+        self.assertEqual(response.data, [])
+
+    def test_cross_user_detail_404(self):
+        budget = Budget.objects.create(
+            user=self.other,
+            category=Category.objects.create(
+                user=self.other, name="X", type="expense"
+            ),
+            amount=Decimal("100.00"),
+            month="2026-07-01",
+        )
+        response = self.client.delete(f"/api/budgets/{budget.id}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ChatTests(APITestCase):
