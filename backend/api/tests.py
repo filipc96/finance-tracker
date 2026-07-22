@@ -757,48 +757,211 @@ class ChatTests(APITestCase):
         self.user.settings.open_ai_api_key = "sk-test"
         self.user.settings.save()
 
-    def _mock_completion(self, mock_openai, content="Here is your answer."):
-        completion = MagicMock()
-        completion.choices = [MagicMock(message=MagicMock(content=content))]
-        mock_openai.return_value.chat.completions.create.return_value = (
-            completion
-        )
-        return mock_openai.return_value.chat.completions.create
-
-    @patch("api.views.OpenAI")
-    def test_chat_success(self, mock_openai):
-        self._mock_completion(mock_openai)
+    @patch("api.views.get_chat_completion", return_value="Here is your answer.")
+    def test_chat_success(self, mock_completion):
         response = self.client.post("/api/chat/", {"message": "How am I doing?"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["response"], "Here is your answer.")
+        resolved = mock_completion.call_args.args[0]
+        self.assertEqual(resolved["provider"], "openai")
+        self.assertEqual(resolved["model"], "gpt-5-mini")
 
-    @patch("api.views.OpenAI")
-    def test_chat_context_includes_transactions(self, mock_openai):
+    @patch("api.views.get_chat_completion", return_value="ok")
+    def test_chat_context_includes_transactions(self, mock_completion):
         cat = Category.objects.create(user=self.user, name="Food", type="expense")
         create_transaction(self.user, cat, "42.00", name="groceries-run")
-        create_call = self._mock_completion(mock_openai)
 
         self.client.post("/api/chat/", {"message": "What did I buy?"})
 
-        system_prompt = create_call.call_args.kwargs["messages"][0]["content"]
+        system_prompt = mock_completion.call_args.args[1]
         self.assertIn("groceries-run", system_prompt)
         self.assertIn("Food", system_prompt)
+
+    @patch("api.views.get_chat_completion", return_value="ok")
+    def test_chat_provider_and_model_override(self, mock_completion):
+        self.user.settings.anthropic_api_key = "sk-ant"
+        self.user.settings.save()
+        self.client.post(
+            "/api/chat/",
+            {"message": "hi", "provider": "anthropic", "model": "claude-opus-4-6"},
+        )
+        resolved = mock_completion.call_args.args[0]
+        self.assertEqual(resolved["provider"], "anthropic")
+        self.assertEqual(resolved["model"], "claude-opus-4-6")
+
+    @patch("api.views.get_chat_completion", return_value="ok")
+    def test_chat_uses_settings_provider(self, mock_completion):
+        self.user.settings.llm_provider = "ollama"
+        self.user.settings.llm_model = "llama3"
+        self.user.settings.save()
+        self.client.post("/api/chat/", {"message": "hi"})
+        resolved = mock_completion.call_args.args[0]
+        self.assertEqual(resolved["provider"], "ollama")
+        self.assertEqual(resolved["model"], "llama3")
+        self.assertEqual(resolved["api_key"], "ollama")
+        self.assertEqual(resolved["base_url"], "http://localhost:11434/v1")
 
     def test_chat_requires_message(self):
         response = self.client.post("/api/chat/", {"message": "  "})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_chat_requires_api_key(self):
+    def test_chat_missing_openai_key(self):
         self.user.settings.open_ai_api_key = ""
         self.user.settings.save()
         response = self.client.post("/api/chat/", {"message": "hi"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Settings page", response.data["error"])
 
+    def test_chat_missing_anthropic_key(self):
+        response = self.client.post(
+            "/api/chat/", {"message": "hi", "provider": "anthropic"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Anthropic", response.data["error"])
+
+    def test_chat_local_provider_requires_model(self):
+        response = self.client.post(
+            "/api/chat/", {"message": "hi", "provider": "ollama"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("model", response.data["error"].lower())
+
+    def test_chat_unknown_provider(self):
+        response = self.client.post(
+            "/api/chat/", {"message": "hi", "provider": "grok"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("api.views.get_chat_completion")
+    def test_chat_local_connection_error_502(self, mock_completion):
+        from .llm import LLMConnectionError
+
+        mock_completion.side_effect = LLMConnectionError(
+            "Could not connect to Ollama at http://localhost:11434/v1. "
+            "Is it running?"
+        )
+        response = self.client.post(
+            "/api/chat/", {"message": "hi", "provider": "ollama", "model": "llama3"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertIn("running", response.data["error"])
+
     def test_chat_requires_auth(self):
         self.client.force_authenticate(None)
         response = self.client.post("/api/chat/", {"message": "hi"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class LLMUnitTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.settings = self.user.settings
+
+    def test_resolve_openai_defaults(self):
+        from .llm import resolve_llm
+
+        self.settings.open_ai_api_key = "sk-x"
+        resolved = resolve_llm(self.settings)
+        self.assertEqual(resolved["model"], "gpt-5-mini")
+        self.assertIsNone(resolved["base_url"])
+
+    def test_resolve_local_base_url_override(self):
+        from .llm import resolve_llm
+
+        self.settings.ollama_base_url = "http://192.168.1.10:11434/v1"
+        resolved = resolve_llm(self.settings, provider="ollama", model="llama3")
+        self.assertEqual(resolved["base_url"], "http://192.168.1.10:11434/v1")
+
+    @patch("api.llm.OpenAI")
+    def test_openai_compat_client_kwargs(self, mock_openai):
+        from .llm import get_chat_completion
+
+        completion = MagicMock()
+        completion.choices = [MagicMock(message=MagicMock(content="hi"))]
+        mock_openai.return_value.chat.completions.create.return_value = completion
+
+        resolved = {
+            "provider": "lmstudio",
+            "label": "LM Studio",
+            "kind": "openai_compat",
+            "model": "qwen",
+            "api_key": "lm-studio",
+            "base_url": "http://localhost:1234/v1",
+        }
+        text = get_chat_completion(resolved, "sys", "msg")
+        self.assertEqual(text, "hi")
+        _, kwargs = mock_openai.call_args
+        self.assertEqual(kwargs["api_key"], "lm-studio")
+        self.assertEqual(kwargs["base_url"], "http://localhost:1234/v1")
+
+    @patch("api.llm.anthropic_sdk.Anthropic")
+    def test_anthropic_text_extraction(self, mock_anthropic):
+        from .llm import get_chat_completion
+
+        block = MagicMock()
+        block.type = "text"
+        block.text = "claude says hi"
+        mock_anthropic.return_value.messages.create.return_value = MagicMock(
+            content=[block]
+        )
+        resolved = {
+            "provider": "anthropic",
+            "label": "Anthropic",
+            "kind": "anthropic",
+            "model": "claude-sonnet-4-6",
+            "api_key": "sk-ant",
+            "base_url": None,
+        }
+        text = get_chat_completion(resolved, "sys", "msg")
+        self.assertEqual(text, "claude says hi")
+        create_kwargs = mock_anthropic.return_value.messages.create.call_args.kwargs
+        self.assertEqual(create_kwargs["system"], "sys")
+
+
+class ChatProvidersTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+
+    @patch("api.llm._list_local_models", return_value=["llama3", "mistral"])
+    def test_providers_listing(self, mock_local):
+        self.user.settings.open_ai_api_key = "sk-x"
+        self.user.settings.llm_provider = "ollama"
+        self.user.settings.llm_model = "llama3"
+        self.user.settings.save()
+
+        response = self.client.get("/api/chat/providers/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["active"]["provider"], "ollama")
+
+        providers = {p["name"]: p for p in response.data["providers"]}
+        self.assertTrue(providers["openai"]["configured"])
+        self.assertFalse(providers["anthropic"]["configured"])
+        self.assertEqual(providers["ollama"]["models"], ["llama3", "mistral"])
+
+    @patch("api.llm.requests.get", side_effect=Exception)
+    def test_local_probe_failure_reports_error(self, mock_get):
+        import requests as requests_lib
+
+        mock_get.side_effect = requests_lib.ConnectionError()
+        response = self.client.get("/api/chat/providers/")
+        providers = {p["name"]: p for p in response.data["providers"]}
+        self.assertEqual(providers["ollama"]["models"], [])
+        self.assertIn("not reachable", providers["ollama"]["error"])
+
+    def test_settings_llm_round_trip(self):
+        payload = {
+            "llm_provider": "lmstudio",
+            "llm_model": "qwen2.5",
+            "anthropic_api_key": "sk-ant",
+            "ollama_base_url": "http://10.0.0.5:11434/v1",
+            "lmstudio_base_url": "",
+        }
+        post = self.client.post("/api/settings/", payload)
+        self.assertEqual(post.status_code, status.HTTP_200_OK)
+        get = self.client.get("/api/settings/")
+        for key, value in payload.items():
+            self.assertEqual(get.data[key], value)
 
 
 class ChangePasswordTests(APITestCase):

@@ -45,7 +45,16 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import TruncMonth, TruncYear, Coalesce
 from datetime import datetime, timedelta
-from openai import OpenAI, OpenAIError, AuthenticationError, RateLimitError
+from .llm import (
+    LLMAuthError,
+    LLMConfigError,
+    LLMConnectionError,
+    LLMError,
+    LLMRateLimitError,
+    get_chat_completion,
+    list_providers,
+    resolve_llm,
+)
 
 
 class CreateUserView(generics.CreateAPIView):
@@ -838,16 +847,6 @@ class ChatView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        api_key = request.user.settings.open_ai_api_key
-        if not api_key:
-            return Response(
-                {
-                    "error": "No OpenAI API key configured. "
-                    "Add one on the Settings page."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         system_prompt = (
             "You are a helpful personal finance assistant inside a "
             "finance-tracker app. Answer concisely using the user's "
@@ -857,31 +856,55 @@ class ChatView(APIView):
         )
 
         try:
-            client = OpenAI(api_key=api_key, timeout=30)
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message},
-                ],
-                max_tokens=500,
+            resolved = resolve_llm(
+                request.user.settings,
+                provider=request.data.get("provider"),
+                model=request.data.get("model"),
             )
-            return Response({"response": completion.choices[0].message.content})
-        except AuthenticationError:
+            text = get_chat_completion(resolved, system_prompt, message)
+            return Response({"response": text})
+        except LLMConfigError as e:
             return Response(
-                {"error": "Invalid OpenAI API key."},
+                {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except LLMAuthError:
+            return Response(
+                {"error": f"Invalid {resolved['label']} API key."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except RateLimitError:
+        except LLMRateLimitError:
             return Response(
-                {"error": "OpenAI rate limit reached. Try again shortly."},
+                {
+                    "error": f"{resolved['label']} rate limit reached. "
+                    "Try again shortly."
+                },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        except OpenAIError:
+        except LLMConnectionError as e:
             return Response(
-                {"error": "Failed to reach OpenAI. Try again later."},
+                {"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY
+            )
+        except LLMError:
+            return Response(
+                {"error": "The LLM request failed. Try again later."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+
+class ChatProviders(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        settings = request.user.settings
+        return Response(
+            {
+                "active": {
+                    "provider": settings.llm_provider,
+                    "model": settings.llm_model,
+                },
+                "providers": list_providers(settings),
+            }
+        )
 
 
 class GetTransactionsByTimespan(APIView):

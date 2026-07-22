@@ -26,6 +26,11 @@ class SettingsSerializer(serializers.ModelSerializer):
         fields = [
             "dark_mode",
             "open_ai_api_key",
+            "anthropic_api_key",
+            "ollama_base_url",
+            "lmstudio_base_url",
+            "llm_provider",
+            "llm_model",
             "t212_api_key",
             "t212_api_secret",
             "t212_environment",

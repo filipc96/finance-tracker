@@ -49,6 +49,7 @@ urlpatterns = [
     ),
     path("settings/", views.SettingsListCreate.as_view(), name="settings"),
     path("chat/", views.ChatView.as_view(), name="chat"),
+    path("chat/providers/", views.ChatProviders.as_view(), name="chat-providers"),
     path("budgets/", views.BudgetListCreate.as_view(), name="budget-list"),
     path("budgets/<int:pk>/", views.BudgetDetail.as_view(), name="budget-detail"),
     path(

@@ -30,10 +30,23 @@ class Settings(models.Model):
         ("live", "Live"),
         ("demo", "Demo"),
     ]
+    LLM_PROVIDER_CHOICES = [
+        ("openai", "OpenAI"),
+        ("anthropic", "Anthropic"),
+        ("ollama", "Ollama"),
+        ("lmstudio", "LM Studio"),
+    ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     dark_mode = models.BooleanField(default=False)
     open_ai_api_key = models.CharField(max_length=255, blank=True, null=True)
+    anthropic_api_key = models.CharField(max_length=255, blank=True, null=True)
+    ollama_base_url = models.CharField(max_length=255, blank=True)
+    lmstudio_base_url = models.CharField(max_length=255, blank=True)
+    llm_provider = models.CharField(
+        max_length=16, choices=LLM_PROVIDER_CHOICES, default="openai"
+    )
+    llm_model = models.CharField(max_length=100, blank=True)
     t212_api_key = models.CharField(max_length=255, blank=True, null=True)
     t212_api_secret = models.CharField(max_length=255, blank=True, null=True)
     t212_environment = models.CharField(
