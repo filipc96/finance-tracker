@@ -1,13 +1,17 @@
 """Business logic run outside a single view (shared by process endpoints)."""
 
 from datetime import date
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
+from django.db import transaction as db_transaction
 
-from .models import RecurringTransaction, Transaction
+from .models import RecurringTransaction, SavingsAccount, SavingsTransaction, Transaction
 
 # Safety cap so a very old next_due can't loop forever (400 ≈ daily/13 months)
 MAX_MATERIALIZATIONS_PER_ITEM = 400
+# Savings catch-up cap (600 months = 50 years)
+MAX_INTEREST_MONTHS = 600
 
 FREQUENCY_DELTAS = {
     "daily": relativedelta(days=1),
@@ -48,3 +52,48 @@ def process_recurring(user):
         item.save()
 
     return created
+
+
+def next_month_first(d):
+    """First day of the month after d."""
+    return (d.replace(day=1) + relativedelta(months=1))
+
+
+def process_savings_interest(user):
+    """Post monthly interest for each active savings account.
+
+    Nominal monthly rate (apy/12) — a documented simplification, not
+    effective-APY compounding. Interest is posted on the 1st of each month
+    following last_interest_date, catching up missed months. Returns the
+    number of interest entries posted.
+    """
+    today = date.today()
+    posted = 0
+
+    accounts = SavingsAccount.objects.filter(
+        user=user, active=True, apy_rate__gt=0
+    )
+    for account in accounts:
+        with db_transaction.atomic():
+            due = next_month_first(account.last_interest_date)
+            iterations = 0
+            while due <= today and iterations < MAX_INTEREST_MONTHS:
+                monthly_rate = account.apy_rate / Decimal("1200")
+                interest = (account.balance * monthly_rate).quantize(
+                    Decimal("0.01")
+                )
+                account.balance += interest
+                SavingsTransaction.objects.create(
+                    account=account,
+                    type="interest",
+                    amount=interest,
+                    balance_after=account.balance,
+                    date=due,
+                )
+                account.last_interest_date = due
+                due = next_month_first(due)
+                posted += 1
+                iterations += 1
+            account.save()
+
+    return posted

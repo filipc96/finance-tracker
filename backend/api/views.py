@@ -16,6 +16,8 @@ from .serializers import (
     BudgetSerializer,
     CategorySerializer,
     RecurringTransactionSerializer,
+    SavingsAccountSerializer,
+    SavingsTransactionSerializer,
     SettingsSerializer,
     TransactionSerializer,
     UserSerializer,
@@ -25,9 +27,13 @@ from .models import (
     Category,
     PortfolioSnapshot,
     RecurringTransaction,
+    SavingsAccount,
+    SavingsTransaction,
     Transaction,
 )
-from .services import process_recurring
+from .services import process_recurring, process_savings_interest
+from django.db import transaction as db_transaction
+from django.shortcuts import get_object_or_404
 from .t212 import T212AuthError, T212Client, T212Error, T212RateLimited
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -553,6 +559,91 @@ class RecurringDelete(generics.DestroyAPIView):
         return RecurringTransaction.objects.filter(user=self.request.user)
 
 
+class SavingsListCreate(generics.ListCreateAPIView):
+    serializer_class = SavingsAccountSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavingsAccount.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        starting_balance = serializer.validated_data.pop(
+            "starting_balance", Decimal("0.00")
+        )
+        account = serializer.save(
+            user=self.request.user,
+            last_interest_date=datetime.now().date(),
+        )
+        if starting_balance > 0:
+            account.balance = starting_balance
+            account.save()
+            SavingsTransaction.objects.create(
+                account=account,
+                type="deposit",
+                amount=starting_balance,
+                balance_after=account.balance,
+                date=datetime.now().date(),
+            )
+
+
+class SavingsDetail(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = SavingsAccountSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavingsAccount.objects.filter(user=self.request.user)
+
+
+class SavingsTransactionListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_account(self, request, pk):
+        return get_object_or_404(SavingsAccount, user=request.user, pk=pk)
+
+    def get(self, request, pk):
+        account = self.get_account(request, pk)
+        transactions = account.transactions.order_by("date", "id")
+        return Response(SavingsTransactionSerializer(transactions, many=True).data)
+
+    def post(self, request, pk):
+        account = self.get_account(request, pk)
+        serializer = SavingsTransactionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tx_type = serializer.validated_data["type"]
+        amount = serializer.validated_data["amount"]
+        tx_date = serializer.validated_data.get("date") or datetime.now().date()
+
+        with db_transaction.atomic():
+            account = SavingsAccount.objects.select_for_update().get(
+                pk=account.pk
+            )
+            if tx_type == "withdraw":
+                if amount > account.balance:
+                    return Response(
+                        {"error": "Insufficient savings balance."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                account.balance -= amount
+            else:
+                account.balance += amount
+            account.save()
+            savings_tx = SavingsTransaction.objects.create(
+                account=account,
+                type=tx_type,
+                amount=amount,
+                balance_after=account.balance,
+                date=tx_date,
+            )
+        return Response(
+            SavingsTransactionSerializer(savings_tx).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class ProcessOnLoad(APIView):
     """Client-triggered processing hook called by the frontend on app load."""
 
@@ -560,7 +651,13 @@ class ProcessOnLoad(APIView):
 
     def post(self, request):
         created = process_recurring(request.user)
-        return Response({"recurring_created": created})
+        interest_posted = process_savings_interest(request.user)
+        return Response(
+            {
+                "recurring_created": created,
+                "interest_posted": interest_posted,
+            }
+        )
 
 
 def build_financial_context(user):

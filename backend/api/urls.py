@@ -68,6 +68,17 @@ urlpatterns = [
         name="recurring-delete",
     ),
     path("process/", views.ProcessOnLoad.as_view(), name="process-on-load"),
+    path("savings/", views.SavingsListCreate.as_view(), name="savings-list"),
+    path(
+        "savings/<int:pk>/",
+        views.SavingsDetail.as_view(),
+        name="savings-detail",
+    ),
+    path(
+        "savings/<int:pk>/transactions/",
+        views.SavingsTransactionListCreate.as_view(),
+        name="savings-transactions",
+    ),
     path(
         "stocks/portfolio/",
         views.StocksPortfolio.as_view(),

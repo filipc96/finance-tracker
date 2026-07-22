@@ -15,6 +15,8 @@ from .models import (
     Category,
     PortfolioSnapshot,
     RecurringTransaction,
+    SavingsAccount,
+    SavingsTransaction,
     Settings,
     Transaction,
 )
@@ -356,6 +358,122 @@ class RecurringTests(APITestCase):
             },
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class SavingsTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.other = create_user("bob")
+        self.client.force_authenticate(self.user)
+
+    def make_account(self, balance="1000.00", apy="12.00", months_ago=0):
+        return SavingsAccount.objects.create(
+            user=self.user,
+            name="Fund",
+            balance=Decimal(balance),
+            apy_rate=Decimal(apy),
+            last_interest_date=date.today() - relativedelta(months=months_ago),
+        )
+
+    def test_create_with_starting_balance_records_deposit(self):
+        response = self.client.post(
+            "/api/savings/",
+            {"name": "Fund", "apy_rate": "4.50", "starting_balance": "500.00"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        account = SavingsAccount.objects.get(user=self.user)
+        self.assertEqual(account.balance, Decimal("500.00"))
+        deposit = account.transactions.get()
+        self.assertEqual(deposit.type, "deposit")
+        self.assertEqual(deposit.balance_after, Decimal("500.00"))
+
+    def test_single_month_interest_math(self):
+        account = self.make_account(months_ago=1)
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["interest_posted"], 1)
+        account.refresh_from_db()
+        # 1000 at 12% APY -> 1% monthly -> 10.00
+        self.assertEqual(account.balance, Decimal("1010.00"))
+
+    def test_catch_up_posts_one_entry_per_month(self):
+        account = self.make_account(months_ago=3)
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["interest_posted"], 3)
+        account.refresh_from_db()
+        self.assertEqual(
+            account.transactions.filter(type="interest").count(), 3
+        )
+        self.assertGreater(account.last_interest_date, date.today() - relativedelta(months=1))
+
+    def test_process_idempotent_same_day(self):
+        self.make_account(months_ago=1)
+        self.client.post("/api/process/")
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["interest_posted"], 0)
+
+    def test_inactive_and_zero_apy_skipped(self):
+        account = self.make_account(months_ago=2)
+        account.active = False
+        account.save()
+        SavingsAccount.objects.create(
+            user=self.user,
+            name="NoRate",
+            balance=Decimal("1000.00"),
+            apy_rate=Decimal("0.00"),
+            last_interest_date=date.today() - relativedelta(months=2),
+        )
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["interest_posted"], 0)
+
+    def test_withdraw_overdraft_rejected(self):
+        account = self.make_account(balance="50.00")
+        response = self.client.post(
+            f"/api/savings/{account.id}/transactions/",
+            {"type": "withdraw", "amount": "100.00"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal("50.00"))
+
+    def test_deposit_and_withdraw_update_balance_chain(self):
+        account = self.make_account(balance="0.00")
+        self.client.post(
+            f"/api/savings/{account.id}/transactions/",
+            {"type": "deposit", "amount": "200.00"},
+        )
+        self.client.post(
+            f"/api/savings/{account.id}/transactions/",
+            {"type": "withdraw", "amount": "80.00"},
+        )
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal("120.00"))
+        history = list(
+            account.transactions.order_by("id").values_list(
+                "balance_after", flat=True
+            )
+        )
+        self.assertEqual(history, [Decimal("200.00"), Decimal("120.00")])
+
+    def test_interest_type_rejected_from_clients(self):
+        account = self.make_account()
+        response = self.client.post(
+            f"/api/savings/{account.id}/transactions/",
+            {"type": "interest", "amount": "10.00"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cross_user_account_404(self):
+        other_account = SavingsAccount.objects.create(
+            user=self.other,
+            name="Bobs",
+            balance=Decimal("10.00"),
+            apy_rate=Decimal("1.00"),
+            last_interest_date=date.today(),
+        )
+        response = self.client.get(
+            f"/api/savings/{other_account.id}/transactions/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 SAMPLE_POSITION = {

@@ -165,6 +165,44 @@ class RecurringTransaction(models.Model):
         return f"{self.name} ({self.frequency})"
 
 
+class SavingsAccount(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    balance = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
+    apy_rate = models.DecimalField(max_digits=5, decimal_places=2)  # percent
+    active = models.BooleanField(default=True)
+    last_interest_date = models.DateField()
+
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.apy_rate}%)"
+
+
+class SavingsTransaction(models.Model):
+
+    TYPE_CHOICES = [
+        ("deposit", "Deposit"),
+        ("withdraw", "Withdraw"),
+        ("interest", "Interest"),
+    ]
+    account = models.ForeignKey(
+        SavingsAccount, on_delete=models.CASCADE, related_name="transactions"
+    )
+    type = models.CharField(max_length=8, choices=TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    date = models.DateField()
+
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.account.name}: {self.type} {self.amount}"
+
+
 @receiver(post_save, sender=Transaction)
 def update_balance_post_save(sender, instance, created, **kwargs):
     if created:

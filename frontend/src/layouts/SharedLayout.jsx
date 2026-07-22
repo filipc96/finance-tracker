@@ -27,9 +27,17 @@ const SharedLayout = ({ menuItems }) => {
         .post("/api/process/")
         .then((res) => {
           const created = res.data.recurring_created;
+          const interest = res.data.interest_posted;
           if (created > 0) {
             toast.success(
               `${created} recurring transaction${created > 1 ? "s" : ""} added.`
+            );
+          }
+          if (interest > 0) {
+            toast.success(
+              `Interest posted to ${interest} savings period${
+                interest > 1 ? "s" : ""
+              }.`
             );
           }
         })
