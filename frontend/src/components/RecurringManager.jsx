@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
+import Button from "./ui/Button";
 
 const emptyForm = {
   name: "",
@@ -137,12 +138,9 @@ const RecurringManager = ({ onMaterialized }) => {
             className={inputClass}
           />
         </div>
-        <button
-          type="submit"
-          className="px-5 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
-        >
+        <Button type="submit" variant="secondary">
           Add
-        </button>
+        </Button>
       </form>
 
       {items.length === 0 ? (

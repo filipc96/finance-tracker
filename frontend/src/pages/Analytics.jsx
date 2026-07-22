@@ -6,6 +6,7 @@ import NetWorthChart from "../components/NetWorthChart";
 import IncomeExpenseChart from "../components/IncomeExpenseChart";
 import CategoryTrendsChart from "../components/CategoryTrendsChart";
 import SavingsRateChart from "../components/SavingsRateChart";
+import Card from "../components/ui/Card";
 import api from "../api";
 
 const Analytics = () => {
@@ -23,52 +24,49 @@ const Analytics = () => {
   return (
     <>
       <h1>Analytics</h1>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
+
+      <div className="flex flex-col gap-6 py-6 w-full max-w-5xl">
+        <Card>
           <NetWorthChart />
-        </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
+        </Card>
+
+        <Card>
           <IncomeExpenseChart
             summary={summary}
             year={year}
             onYearChange={setYear}
           />
-        </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
+        </Card>
+
+        <Card>
           <SavingsRateChart summary={summary} />
-        </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
+        </Card>
+
+        <Card>
           <CategoryTrendsChart />
+        </Card>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card title="Expenses this year">
+            <Chart type="expense" />
+          </Card>
+          <Card title="Income this year">
+            <Chart type="income" />
+          </Card>
         </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
-          <Chart type="expense" />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card title="Expenses by category">
+            <PieChart type="expense" />
+          </Card>
+          <Card title="Income by category">
+            <PieChart type="income" />
+          </Card>
         </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
-          <Chart type="income" />
-        </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
-          <PieChart type="expense" />
-        </div>
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
-          <PieChart type="income" />
-        </div>
-      </div>
-      <div className="flex space-x-8 py-6 w-4/5">
-        <div className="flex flex-col rounded-md border w-full p-8 justify-center">
+
+        <Card title="Transactions over time">
           <Graph />
-        </div>
+        </Card>
       </div>
     </>
   );

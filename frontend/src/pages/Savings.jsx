@@ -12,6 +12,7 @@ import {
   Legend,
 } from "chart.js";
 import api from "../api";
+import Button from "../components/ui/Button";
 import { useTheme } from "../contexts/ThemeContext";
 import { buildLineOptions } from "../utils/chartTheme";
 
@@ -302,12 +303,9 @@ const Savings = () => {
               className={`${inputClass} w-36`}
             />
           </div>
-          <button
-            type="submit"
-            className="px-6 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
-          >
+          <Button type="submit" variant="secondary">
             Add Account
-          </button>
+          </Button>
         </form>
 
         {accounts.length === 0 ? (

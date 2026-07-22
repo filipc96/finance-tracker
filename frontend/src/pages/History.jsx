@@ -1,6 +1,7 @@
 import AddTransaction from "../components/AddTransaction";
 import RecurringManager from "../components/RecurringManager";
 import TransactionTable from "../components/TransactionsTable";
+import Button from "../components/ui/Button";
 import api from "../api";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
@@ -104,18 +105,16 @@ const History = () => {
           ></AddTransaction>
         </div>
         <div className="w-full flex justify-end gap-3">
-          <button
-            onClick={exportCSV}
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
+          <Button variant="ghost" size="sm" onClick={exportCSV}>
             Export CSV
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             Import CSV
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -131,23 +130,25 @@ const History = () => {
           />
           {count > PAGE_SIZE && (
             <div className="flex items-center justify-center space-x-4 py-4">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => getTransactions(page - 1)}
                 disabled={page <= 1}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40"
               >
                 Prev
-              </button>
-              <span>
+              </Button>
+              <span className="text-sm text-gray-600 dark:text-gray-300">
                 Page {page} of {totalPages}
               </span>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => getTransactions(page + 1)}
                 disabled={!hasNext}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40"
               >
                 Next
-              </button>
+              </Button>
             </div>
           )}
         </div>{" "}

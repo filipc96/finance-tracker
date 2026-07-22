@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../api";
+import Button from "../components/ui/Button";
 
 const SummaryCard = ({ label, value, colored }) => {
   const number = Number(value);
@@ -74,13 +75,14 @@ const Stocks = () => {
 
       <div className="flex flex-col gap-6 py-6">
         <div className="flex items-center gap-4">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => getPortfolio(true)}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+            isLoading={loading}
           >
-            {loading ? "Loading…" : "Refresh"}
-          </button>
+            Refresh
+          </Button>
           {portfolio && (
             <span className="text-sm text-gray-500 dark:text-gray-400">
               as of {new Date(portfolio.fetched_at).toLocaleString()}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
 
 const MyAccount = () => {
   const [user, setUser] = useState(null);
@@ -42,9 +44,6 @@ const MyAccount = () => {
       .finally(() => setSaving(false));
   };
 
-  const inputClass =
-    "w-full px-4 py-2 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:border-blue-500";
-
   return (
     <>
       <h2>My Account</h2>
@@ -81,38 +80,31 @@ const MyAccount = () => {
           onSubmit={handleChangePassword}
           className="flex flex-col gap-4 rounded-lg border border-gray-200 dark:border-gray-700 p-6"
         >
-          <h3 className="font-semibold">Change password</h3>
-          <input
+          <h3>Change password</h3>
+          <Input
             type="password"
             placeholder="Current password"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
-            className={inputClass}
             required
           />
-          <input
+          <Input
             type="password"
             placeholder="New password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className={inputClass}
             required
           />
-          <input
+          <Input
             type="password"
             placeholder="Confirm new password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className={inputClass}
             required
           />
-          <button
-            type="submit"
-            disabled={saving}
-            className="self-start px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Change password"}
-          </button>
+          <Button type="submit" isLoading={saving} className="self-start">
+            Change password
+          </Button>
         </form>
       </div>
     </>

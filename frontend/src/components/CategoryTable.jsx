@@ -23,7 +23,7 @@ const CategoryTable = ({ categories, onDelete }) => {
           {categories.map((category) => {
             return (
               <tr
-                className="odd:bg-white odd:dark:bg-gray-900 even:bg-gray-50 even:dark:bg-gray-800 border-b dark:border-gray-700"
+                className="odd:bg-white odd:dark:bg-gray-900 even:bg-gray-50 even:dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
                 key={category.id}
               >
                 <td className="px-6 py-4"> {category.name}</td>
@@ -41,10 +41,11 @@ const CategoryTable = ({ categories, onDelete }) => {
                 )}
                 <td className="px-6 py-4">
                   <button
-                    className="delete-button"
                     onClick={() => onDelete(category.id)}
+                    className="rounded p-1.5 text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
+                    aria-label="Delete category"
                   >
-                    <FontAwesomeIcon icon={faTrash} style={{ color: "gray" }} />
+                    <FontAwesomeIcon icon={faTrash} />
                   </button>
                 </td>
               </tr>

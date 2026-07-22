@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
+import Button from "../components/ui/Button";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
@@ -207,12 +208,9 @@ const Budgets = () => {
               className="px-3 py-2 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 w-36"
             />
           </div>
-          <button
-            type="submit"
-            className="px-6 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
-          >
+          <Button type="submit" variant="secondary">
             Add Budget
-          </button>
+          </Button>
         </form>
 
         <div className="flex flex-col gap-4">

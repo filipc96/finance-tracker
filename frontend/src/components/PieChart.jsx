@@ -63,12 +63,7 @@ const PieChart = ({ type }) => {
     },
   };
 
-  return (
-    <>
-      {type === "expense" ? "Expenses Pie Chart" : "Incomes Pie Chart"}
-      <Pie data={data} options={options} />
-    </>
-  );
+  return <Pie data={data} options={options} />;
 };
 
 export default PieChart;
