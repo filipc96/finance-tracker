@@ -11,11 +11,13 @@ from rest_framework.pagination import PageNumberPagination
 from .serializers import (
     BudgetSerializer,
     CategorySerializer,
+    RecurringTransactionSerializer,
     SettingsSerializer,
     TransactionSerializer,
     UserSerializer,
 )
-from .models import Budget, Transaction, Category
+from .models import Budget, RecurringTransaction, Transaction, Category
+from .services import process_recurring
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import TruncMonth, TruncYear, Coalesce
@@ -282,6 +284,37 @@ class BudgetDetail(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Budget.objects.filter(user=self.request.user)
+
+
+class RecurringListCreate(generics.ListCreateAPIView):
+    serializer_class = RecurringTransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return RecurringTransaction.objects.filter(
+            user=self.request.user
+        ).select_related("category")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class RecurringDelete(generics.DestroyAPIView):
+    serializer_class = RecurringTransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return RecurringTransaction.objects.filter(user=self.request.user)
+
+
+class ProcessOnLoad(APIView):
+    """Client-triggered processing hook called by the frontend on app load."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        created = process_recurring(request.user)
+        return Response({"recurring_created": created})
 
 
 def build_financial_context(user):

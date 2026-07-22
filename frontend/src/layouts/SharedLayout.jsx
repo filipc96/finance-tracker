@@ -3,6 +3,9 @@ import NavigationBar from "../components/NavigationBar";
 import Terminal from "../components/Terminal";
 import Chat from "../components/Chat";
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import api from "../api";
+import { ACCESS_TOKEN } from "../constants";
 import {
   faBars,
   faXmark,
@@ -16,6 +19,23 @@ const SharedLayout = ({ menuItems }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 726);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    // Materialize due recurring transactions once per app load
+    if (localStorage.getItem(ACCESS_TOKEN)) {
+      api
+        .post("/api/process/")
+        .then((res) => {
+          const created = res.data.recurring_created;
+          if (created > 0) {
+            toast.success(
+              `${created} recurring transaction${created > 1 ? "s" : ""} added.`
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {

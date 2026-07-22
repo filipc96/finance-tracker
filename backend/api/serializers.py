@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Budget, Category, Transaction, Settings
+from .models import Budget, Category, RecurringTransaction, Transaction, Settings
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -65,6 +65,44 @@ class BudgetSerializer(serializers.ModelSerializer):
         if existing.exists():
             raise serializers.ValidationError(
                 "A budget for this category and month already exists."
+            )
+        return attrs
+
+
+class RecurringTransactionSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = RecurringTransaction
+        fields = [
+            "id",
+            "name",
+            "amount",
+            "category",
+            "category_name",
+            "type",
+            "frequency",
+            "next_due",
+            "active",
+        ]
+        extra_kwargs = {"user": {"read_only": True}}
+
+    def validate_category(self, category):
+        if category.user != self.context["request"].user:
+            raise serializers.ValidationError("Category not found.")
+        return category
+
+    def validate_amount(self, amount):
+        if amount <= 0:
+            raise serializers.ValidationError("Amount must be positive.")
+        return amount
+
+    def validate(self, attrs):
+        category = attrs.get("category") or (self.instance and self.instance.category)
+        type_ = attrs.get("type") or (self.instance and self.instance.type)
+        if category and type_ and category.type != type_:
+            raise serializers.ValidationError(
+                "Transaction type must match the category type."
             )
         return attrs
 

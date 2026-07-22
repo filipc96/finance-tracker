@@ -1,4 +1,5 @@
 import AddTransaction from "../components/AddTransaction";
+import RecurringManager from "../components/RecurringManager";
 import TransactionTable from "../components/TransactionsTable";
 import api from "../api";
 import toast from "react-hot-toast";
@@ -87,6 +88,7 @@ const History = () => {
             </div>
           )}
         </div>{" "}
+        <RecurringManager onMaterialized={() => getTransactions()} />
       </div>
     </>
   );

@@ -5,7 +5,18 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Account, Budget, Category, Settings, Transaction
+from datetime import date
+
+from dateutil.relativedelta import relativedelta
+
+from .models import (
+    Account,
+    Budget,
+    Category,
+    RecurringTransaction,
+    Settings,
+    Transaction,
+)
 
 
 def create_user(username="alice", password="test-pass-123"):
@@ -271,6 +282,78 @@ class BudgetTests(APITestCase):
         )
         response = self.client.delete(f"/api/budgets/{budget.id}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class RecurringTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+        self.expense = Category.objects.create(
+            user=self.user, name="Rent", type="expense"
+        )
+
+    def make_recurring(self, next_due, frequency="monthly", amount="100.00"):
+        return RecurringTransaction.objects.create(
+            user=self.user,
+            name="Rent payment",
+            amount=Decimal(amount),
+            category=self.expense,
+            type="expense",
+            frequency=frequency,
+            next_due=next_due,
+        )
+
+    def test_process_creates_due_transaction_and_advances(self):
+        item = self.make_recurring(date.today())
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 1)
+        item.refresh_from_db()
+        self.assertEqual(item.next_due, date.today() + relativedelta(months=1))
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 1)
+
+    def test_process_catches_up_missed_months(self):
+        self.make_recurring(date.today() - relativedelta(months=2))
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 3)  # 2 back + today
+
+    def test_process_updates_balance_via_signals(self):
+        self.make_recurring(date.today(), amount="100.00")
+        self.client.post("/api/process/")
+        self.user.account.refresh_from_db()
+        self.assertEqual(self.user.account.balance, Decimal("-100.00"))
+
+    def test_process_is_idempotent_same_day(self):
+        self.make_recurring(date.today())
+        self.client.post("/api/process/")
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 0)
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 1)
+
+    def test_inactive_items_skipped(self):
+        item = self.make_recurring(date.today())
+        item.active = False
+        item.save()
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 0)
+
+    def test_future_items_skipped(self):
+        self.make_recurring(date.today() + relativedelta(days=1))
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 0)
+
+    def test_type_must_match_category(self):
+        response = self.client.post(
+            "/api/recurring/",
+            {
+                "name": "Bad",
+                "amount": "10.00",
+                "category": self.expense.id,
+                "type": "income",
+                "frequency": "monthly",
+                "next_due": str(date.today()),
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class ChatTests(APITestCase):
