@@ -117,16 +117,34 @@ def resolve_llm(settings, provider=None, model=None):
     }
 
 
-def get_chat_completion(resolved, system, message, max_tokens=1500):
+def get_chat_completion(resolved, system, message, max_tokens=1500, temperature=None):
     """Send one chat turn and return the response text.
 
     Default budget is generous because reasoning models (e.g. gpt-5-mini)
     spend part of the completion budget on hidden reasoning tokens; too small
     a budget can leave nothing for the visible answer.
+
+    `temperature` is optional: pass 0 for deterministic structured extraction
+    (receipt parsing). It is omitted for OpenAI reasoning models, which only
+    accept the default temperature and 400 on anything else.
     """
     if resolved["kind"] == "anthropic":
-        return _anthropic_completion(resolved, system, message, max_tokens)
-    return _openai_compat_completion(resolved, system, message, max_tokens)
+        return _anthropic_completion(
+            resolved, system, message, max_tokens, temperature
+        )
+    return _openai_compat_completion(
+        resolved, system, message, max_tokens, temperature
+    )
+
+
+# OpenAI reasoning families reject sampling params like `temperature`; they
+# only run at the default. Matched by model-name prefix.
+_OPENAI_REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _is_openai_reasoning(model):
+    name = (model or "").lower()
+    return any(name.startswith(prefix) for prefix in _OPENAI_REASONING_PREFIXES)
 
 
 def _connection_error(resolved):
@@ -140,7 +158,7 @@ def _connection_error(resolved):
     )
 
 
-def _openai_compat_completion(resolved, system, message, max_tokens):
+def _openai_compat_completion(resolved, system, message, max_tokens, temperature=None):
     client = OpenAI(
         api_key=resolved["api_key"],
         base_url=resolved["base_url"],
@@ -153,6 +171,13 @@ def _openai_compat_completion(resolved, system, message, max_tokens):
         token_kwargs = {"max_completion_tokens": max_tokens}
     else:
         token_kwargs = {"max_tokens": max_tokens}
+    # Only pass temperature where it's accepted: OpenAI reasoning models reject
+    # it, everything else (gpt-4o*, Ollama, LM Studio) honours it.
+    if temperature is not None and not (
+        resolved["provider"] == "openai"
+        and _is_openai_reasoning(resolved["model"])
+    ):
+        token_kwargs["temperature"] = temperature
     try:
         completion = client.chat.completions.create(
             model=resolved["model"],
@@ -173,14 +198,16 @@ def _openai_compat_completion(resolved, system, message, max_tokens):
         raise LLMError(str(e)) from e
 
 
-def _anthropic_completion(resolved, system, message, max_tokens):
+def _anthropic_completion(resolved, system, message, max_tokens, temperature=None):
     client = anthropic_sdk.Anthropic(api_key=resolved["api_key"], timeout=60)
+    extra = {} if temperature is None else {"temperature": temperature}
     try:
         response = client.messages.create(
             model=resolved["model"],
             system=system,
             messages=[{"role": "user", "content": message}],
             max_tokens=max_tokens,
+            **extra,
         )
         return "".join(
             block.text for block in response.content if block.type == "text"

@@ -1077,14 +1077,14 @@ class LLMTokenParamTests(APITestCase):
     """GPT-5+ rejects max_tokens (needs max_completion_tokens); local
     OpenAI-compatible servers only understand max_tokens. Guard the split."""
 
-    def _run(self, provider, base_url=None):
+    def _run(self, provider, base_url=None, model="m", temperature=None):
         from .llm import get_chat_completion
 
         resolved = {
             "provider": provider,
             "kind": "openai_compat",
             "label": "X",
-            "model": "m",
+            "model": model,
             "api_key": "k",
             "base_url": base_url,
         }
@@ -1093,7 +1093,9 @@ class LLMTokenParamTests(APITestCase):
             client.chat.completions.create.return_value = MagicMock(
                 choices=[MagicMock(message=MagicMock(content="ok"))]
             )
-            get_chat_completion(resolved, "sys", "msg", max_tokens=42)
+            get_chat_completion(
+                resolved, "sys", "msg", max_tokens=42, temperature=temperature
+            )
             return client.chat.completions.create.call_args.kwargs
 
     def test_openai_uses_max_completion_tokens(self):
@@ -1105,6 +1107,25 @@ class LLMTokenParamTests(APITestCase):
         kwargs = self._run("ollama", base_url="http://localhost:11434/v1")
         self.assertEqual(kwargs.get("max_tokens"), 42)
         self.assertNotIn("max_completion_tokens", kwargs)
+
+    def test_temperature_omitted_when_none(self):
+        kwargs = self._run("openai", model="gpt-4o-mini")
+        self.assertNotIn("temperature", kwargs)
+
+    def test_temperature_passed_for_non_reasoning_openai(self):
+        kwargs = self._run("openai", model="gpt-4o-mini", temperature=0)
+        self.assertEqual(kwargs.get("temperature"), 0)
+
+    def test_temperature_dropped_for_openai_reasoning_model(self):
+        # gpt-5* / o-series reject sampling params; must not be sent.
+        kwargs = self._run("openai", model="gpt-5-mini", temperature=0)
+        self.assertNotIn("temperature", kwargs)
+
+    def test_temperature_passed_for_local(self):
+        kwargs = self._run(
+            "ollama", base_url="http://localhost:11434/v1", temperature=0
+        )
+        self.assertEqual(kwargs.get("temperature"), 0)
 
 
 class ReceiptScanTests(APITestCase):
@@ -1234,6 +1255,16 @@ class ReceiptUnitTests(APITestCase):
         self.assertEqual(_coerce_date("2026-07-20"), "2026-07-20")
         self.assertEqual(_coerce_date(""), date.today().isoformat())
         self.assertEqual(_coerce_date("garbage"), date.today().isoformat())
+
+    def test_coerce_date_european_day_first(self):
+        from .receipts import _coerce_date
+
+        # DD.MM.YYYY and DD/MM/YY, day-first (Serbian receipts).
+        self.assertEqual(_coerce_date("20.07.2026"), "2026-07-20")
+        self.assertEqual(_coerce_date("05/03/26"), "2026-03-05")
+        self.assertEqual(_coerce_date("Datum: 20.07.2026 14:32"), "2026-07-20")
+        # Impossible day-first date falls back rather than guessing.
+        self.assertEqual(_coerce_date("13.20.2026"), date.today().isoformat())
 
     @patch(
         "api.receipts.get_chat_completion",

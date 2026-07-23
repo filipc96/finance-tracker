@@ -49,6 +49,14 @@ def extract_text(image_bytes):
     except (UnidentifiedImageError, OSError) as exc:
         raise ReceiptError("Could not read that image file.") from exc
 
+    # Upscale small/low-res crops so small print (totals, dates) is legible to
+    # the recognizer. Large phone photos are left alone.
+    longest = max(image.size)
+    if longest < 1600:
+        scale = 1600 / longest
+        new_size = (round(image.width * scale), round(image.height * scale))
+        image = image.resize(new_size, Image.LANCZOS)
+
     engine = _get_engine()
     result, _elapsed = engine(np.asarray(image))
     if not result:
@@ -69,20 +77,35 @@ def extract_text(image_bytes):
 def _build_prompt(category_names):
     known = ", ".join(category_names) if category_names else "(none yet)"
     return (
-        "You extract a single expense from the raw OCR text of a shopping "
-        "receipt. The text may be noisy or misordered.\n\n"
-        "Return ONLY a JSON object, no prose, no code fences, with keys:\n"
-        '  "merchant": store/vendor name (short string),\n'
-        '  "date": purchase date as "YYYY-MM-DD" (empty string if unknown),\n'
-        '  "total": the grand total actually paid, as a number (no currency '
-        "symbol, use a dot for decimals),\n"
-        '  "currency": 3-letter code if visible else empty string,\n'
-        '  "suggested_category": the best expense category for the whole '
-        f"purchase. Prefer one of the user's existing categories: [{known}]. "
-        "If none fit, propose a short new one.,\n"
-        '  "confidence": your confidence in the total, 0.0 to 1.0.\n\n'
-        "Pick the final/grand total, not subtotals or item prices. If several "
-        "totals appear, choose the largest that is labelled as the total."
+        "You extract ONE expense from the raw OCR text of a shopping receipt. "
+        "OCR is noisy: characters are often misread (0/O, 1/I/l, 5/S, 8/B, 6/G), "
+        "lines can be out of order, and numbers may repeat.\n\n"
+        "Follow these rules:\n"
+        "- merchant: the store/vendor name, usually at the very top. Keep it "
+        "short; drop addresses, tax/VAT IDs, and legal suffixes (d.o.o., LLC).\n"
+        "- total: the FINAL amount actually paid. Choose the line explicitly "
+        "labelled as the grand total. Total labels include: TOTAL, GRAND TOTAL, "
+        "AMOUNT DUE, BALANCE DUE, UKUPNO, УКУПНО, ZA UPLATU, ЗА УПЛАТУ, IZNOS, "
+        "SUMA. Never pick a subtotal, a single item price, tax/PDV/VAT, change, "
+        "or 'cash tendered'/'gotovina'. If several totals tie, take the largest "
+        "one labelled as a total.\n"
+        "- numbers: receipts may use European formatting where '.' is the "
+        "thousands separator and ',' is the decimal (1.234,56 means 1234.56). "
+        "Output total as a plain number with a dot decimal, no thousands "
+        "separators, no currency symbol.\n"
+        "- currency: 3-letter ISO code if determinable (RSD, EUR, USD), else "
+        "empty string. Serbian dinar receipts show 'дин', 'дин.', 'din', 'RSD'.\n"
+        "- date: purchase date as YYYY-MM-DD. Receipts often print DD.MM.YYYY — "
+        "convert it (day comes first). Empty string if no date is visible.\n"
+        "- suggested_category: the best single category for the whole purchase. "
+        "Strongly prefer an EXACT match (case-insensitive) from the user's "
+        f"existing categories: [{known}]. Only invent a short new category if "
+        "none reasonably fit.\n"
+        "- confidence: 0.0-1.0, your confidence in the TOTAL specifically. Lower "
+        "it when the OCR around the total looks garbled.\n\n"
+        "Reason it through internally, but return ONLY a JSON object — no prose, "
+        "no code fences — with exactly these keys: merchant, date, total, "
+        "currency, suggested_category, confidence."
     )
 
 
@@ -117,8 +140,23 @@ def _coerce_total(value):
 def _coerce_date(value):
     if not value:
         return date.today().isoformat()
-    match = re.search(r"\d{4}-\d{2}-\d{2}", str(value))
-    return match.group(0) if match else date.today().isoformat()
+    text = str(value).strip()
+    # Already ISO (what the prompt asks for).
+    match = re.search(r"\d{4}-\d{2}-\d{2}", text)
+    if match:
+        return match.group(0)
+    # Fallback: European day-first formats the model may pass through
+    # (DD.MM.YYYY, DD/MM/YY). User's receipts are Serbian → day comes first.
+    match = re.search(r"(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})", text)
+    if match:
+        day, month, year = (int(g) for g in match.groups())
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, month, day).isoformat()
+        except ValueError:
+            pass
+    return date.today().isoformat()
 
 
 def parse_receipt(text, resolved, category_names):
@@ -130,7 +168,11 @@ def parse_receipt(text, resolved, category_names):
     # Budget must clear the reasoning overhead of reasoning models (e.g.
     # gpt-5-mini spends ~250-400 tokens thinking before emitting the JSON);
     # too low and the whole budget goes to reasoning, leaving empty content.
-    raw = get_chat_completion(resolved, system, text, max_tokens=1500)
+    # temperature=0 makes extraction deterministic (ignored for reasoning
+    # models, which reject it — see llm.get_chat_completion).
+    raw = get_chat_completion(
+        resolved, system, text, max_tokens=1500, temperature=0
+    )
     if not raw or not raw.strip():
         raise ReceiptError(
             "The model returned an empty response. Try again, or pick a "
