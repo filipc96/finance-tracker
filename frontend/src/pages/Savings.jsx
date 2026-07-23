@@ -84,7 +84,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
               onClick={(e) => e.stopPropagation()}
               className="w-20 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800"
             />
-            <span>% APY</span>
+            <span>% / yr</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -98,7 +98,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
           </>
         ) : (
           <>
-            <span>{account.apy_rate}% APY</span>
+            <span>{account.apy_rate}% / yr</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -180,7 +180,7 @@ const Savings = () => {
   const addAccount = (e) => {
     e.preventDefault();
     if (!form.name || form.apy_rate === "") {
-      toast.error("Name and APY rate are required.");
+      toast.error("Name and annual rate are required.");
       return;
     }
     const payload = { name: form.name, apy_rate: form.apy_rate };
@@ -218,10 +218,10 @@ const Savings = () => {
     api
       .patch(`/api/savings/${id}/`, { apy_rate })
       .then(() => {
-        toast.success("APY updated.");
+        toast.success("Rate updated.");
         getAccounts();
       })
-      .catch(() => toast.error("Failed to update APY."));
+      .catch(() => toast.error("Failed to update rate."));
   };
 
   const deleteAccount = (id) => {
@@ -277,7 +277,7 @@ const Savings = () => {
           </div>
           <div className="flex flex-col">
             <label className="text-sm mb-1 text-gray-600 dark:text-gray-300">
-              APY %
+              Annual rate %
             </label>
             <input
               type="number"
