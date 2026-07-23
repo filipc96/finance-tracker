@@ -605,6 +605,17 @@ class StocksTests(APITestCase):
         self.user.settings.t212_api_key = "key"
         self.user.settings.t212_api_secret = "secret"
         self.user.settings.save()
+        # Keep tests hermetic: stub the FX conversion so no real HTTP call is
+        # made. Returns (amount unchanged, rate 1) — base_value == total_value.
+        fx_patcher = patch(
+            "api.views.to_base",
+            side_effect=lambda amount, currency, on=None: (
+                Decimal(str(amount)),
+                Decimal("1"),
+            ),
+        )
+        fx_patcher.start()
+        self.addCleanup(fx_patcher.stop)
 
     def _mock_client(self, mock_cls):
         instance = mock_cls.return_value
@@ -1019,3 +1030,44 @@ class CategoryTests(APITestCase):
         self.assertTrue(
             Category.objects.filter(user=self.user, name="New").exists()
         )
+
+
+class FxTests(APITestCase):
+    def _api_response(self, rates):
+        mock = MagicMock()
+        mock.raise_for_status.return_value = None
+        mock.json.return_value = {"result": "success", "rates": rates}
+        return mock
+
+    @patch("api.fx.requests.get")
+    def test_converts_and_caches(self, mock_get):
+        from .fx import to_base
+        from .models import ExchangeRate
+
+        mock_get.return_value = self._api_response({"RSD": 100.0})
+        value, rate = to_base(Decimal("10.00"), "USD")
+        self.assertEqual(value, Decimal("1000.00"))
+        self.assertEqual(rate, Decimal("100"))
+        self.assertEqual(ExchangeRate.objects.count(), 1)
+
+        # Second call is served from cache — no second HTTP hit.
+        to_base(Decimal("5.00"), "USD")
+        self.assertEqual(mock_get.call_count, 1)
+
+    @patch("api.fx.requests.get")
+    def test_same_currency_is_identity(self, mock_get):
+        from .fx import to_base
+
+        value, rate = to_base(Decimal("42.00"), "RSD")
+        self.assertEqual(value, Decimal("42.00"))
+        self.assertEqual(rate, Decimal("1"))
+        mock_get.assert_not_called()
+
+    @patch("api.fx.requests.get")
+    def test_network_failure_without_cache_raises(self, mock_get):
+        import requests as _requests
+        from .fx import to_base, FxError
+
+        mock_get.side_effect = _requests.RequestException("boom")
+        with self.assertRaises(FxError):
+            to_base(Decimal("1.00"), "USD")

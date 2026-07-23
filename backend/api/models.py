@@ -137,6 +137,16 @@ class PortfolioSnapshot(models.Model):
     currency = models.CharField(max_length=3, blank=True)
     positions = models.JSONField(default=list)
     fetched_at = models.DateTimeField()
+    # total_value expressed in the app's base currency (RSD). Populated by the
+    # FX conversion at fetch time; net-worth aggregation reads this, not the
+    # native total_value, so mixed-currency holdings sum correctly.
+    base_currency = models.CharField(max_length=3, blank=True)
+    base_value = models.DecimalField(
+        max_digits=16, decimal_places=2, null=True, blank=True
+    )
+    fx_rate = models.DecimalField(
+        max_digits=18, decimal_places=8, null=True, blank=True
+    )
 
     class Meta:
         constraints = [
@@ -148,6 +158,28 @@ class PortfolioSnapshot(models.Model):
 
     def __str__(self):
         return f"{self.user.username} portfolio @ {self.date}"
+
+
+class ExchangeRate(models.Model):
+    """Daily cache of a base->quote FX rate, to avoid re-hitting the FX API.
+
+    Not per-user: rates are global. One row per (base, quote, date)."""
+
+    base = models.CharField(max_length=3)
+    quote = models.CharField(max_length=3)
+    date = models.DateField()
+    rate = models.DecimalField(max_digits=18, decimal_places=8)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["base", "quote", "date"],
+                name="unique_exchange_rate_per_day",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.base}->{self.quote} @ {self.date}: {self.rate}"
 
 
 class NetWorthSnapshot(models.Model):

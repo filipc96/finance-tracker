@@ -75,9 +75,16 @@ def upsert_net_worth_snapshot(user):
     latest_portfolio = (
         PortfolioSnapshot.objects.filter(user=user).order_by("-date").first()
     )
-    portfolio_value = (
-        latest_portfolio.total_value if latest_portfolio else Decimal("0.00")
-    )
+    # Prefer the base-currency (RSD) converted value so net worth doesn't mix
+    # currencies; fall back to the native total for rows predating conversion.
+    if latest_portfolio:
+        portfolio_value = (
+            latest_portfolio.base_value
+            if latest_portfolio.base_value is not None
+            else latest_portfolio.total_value
+        )
+    else:
+        portfolio_value = Decimal("0.00")
 
     # Fresh query — user.account may be a stale cached relation (recurring
     # materialization above can have just changed the balance)

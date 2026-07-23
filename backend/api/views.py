@@ -37,6 +37,7 @@ from .services import (
     process_savings_interest,
     upsert_net_worth_snapshot,
 )
+from .fx import to_base, FxError, BASE_CURRENCY
 from django.db import transaction as db_transaction
 from django.shortcuts import get_object_or_404
 from .t212 import T212AuthError, T212Client, T212Error, T212RateLimited
@@ -332,6 +333,9 @@ def serialize_snapshot(snapshot, stale=False, warning=None):
         "total_value": snapshot.total_value,
         "unrealized_pl": snapshot.unrealized_pl,
         "currency": snapshot.currency,
+        "base_currency": snapshot.base_currency,
+        "base_value": snapshot.base_value,
+        "fx_rate": snapshot.fx_rate,
         "fetched_at": snapshot.fetched_at,
         "stale": stale,
     }
@@ -363,6 +367,9 @@ class StocksPortfolio(APIView):
         if latest and not refresh_requested:
             age = timezone.now() - latest.fetched_at
             if age.total_seconds() < PORTFOLIO_STALE_MINUTES * 60:
+                # Even on a cache hit, make sure today's net-worth snapshot
+                # reflects this portfolio value (see note at the fetch path).
+                upsert_net_worth_snapshot(request.user)
                 return Response(serialize_snapshot(latest))
 
         client = T212Client(
@@ -439,20 +446,42 @@ class StocksPortfolio(APIView):
         )
         currency = cash_data.get("currencyCode") or currency
 
+        total_value = cash + positions_value
+
+        # Convert the native-currency total into the app's base currency (RSD)
+        # so net worth can sum stocks + savings + balance consistently.
+        fx_warning = None
+        try:
+            base_value, fx_rate = to_base(total_value, currency)
+        except FxError:
+            base_value, fx_rate = total_value, None
+            fx_warning = (
+                "Exchange rate unavailable — portfolio not converted to "
+                f"{BASE_CURRENCY}."
+            )
+
         snapshot, _ = PortfolioSnapshot.objects.update_or_create(
             user=request.user,
             date=timezone.now().date(),
             defaults={
-                "total_value": cash + positions_value,
+                "total_value": total_value,
                 "cash": cash,
                 "invested": invested,
                 "unrealized_pl": unrealized_pl,
                 "currency": currency,
                 "positions": positions,
                 "fetched_at": timezone.now(),
+                "base_currency": BASE_CURRENCY,
+                "base_value": base_value,
+                "fx_rate": fx_rate,
             },
         )
-        return Response(serialize_snapshot(snapshot))
+        # Keep today's net-worth snapshot in step with the fresh portfolio value.
+        # Without this, a snapshot written earlier on app load (before the
+        # portfolio was fetched) stays at portfolio_value=0 for the rest of the
+        # day, and the Analytics net-worth graph shows a flat Stocks line.
+        upsert_net_worth_snapshot(request.user)
+        return Response(serialize_snapshot(snapshot, warning=fx_warning))
 
 
 class NetWorthSeries(APIView):
