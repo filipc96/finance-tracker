@@ -1073,6 +1073,40 @@ class FxTests(APITestCase):
             to_base(Decimal("1.00"), "USD")
 
 
+class LLMTokenParamTests(APITestCase):
+    """GPT-5+ rejects max_tokens (needs max_completion_tokens); local
+    OpenAI-compatible servers only understand max_tokens. Guard the split."""
+
+    def _run(self, provider, base_url=None):
+        from .llm import get_chat_completion
+
+        resolved = {
+            "provider": provider,
+            "kind": "openai_compat",
+            "label": "X",
+            "model": "m",
+            "api_key": "k",
+            "base_url": base_url,
+        }
+        with patch("api.llm.OpenAI") as mock_openai:
+            client = mock_openai.return_value
+            client.chat.completions.create.return_value = MagicMock(
+                choices=[MagicMock(message=MagicMock(content="ok"))]
+            )
+            get_chat_completion(resolved, "sys", "msg", max_tokens=42)
+            return client.chat.completions.create.call_args.kwargs
+
+    def test_openai_uses_max_completion_tokens(self):
+        kwargs = self._run("openai")
+        self.assertEqual(kwargs.get("max_completion_tokens"), 42)
+        self.assertNotIn("max_tokens", kwargs)
+
+    def test_local_uses_max_tokens(self):
+        kwargs = self._run("ollama", base_url="http://localhost:11434/v1")
+        self.assertEqual(kwargs.get("max_tokens"), 42)
+        self.assertNotIn("max_completion_tokens", kwargs)
+
+
 class ReceiptScanTests(APITestCase):
     def setUp(self):
         self.user = create_user("alice")

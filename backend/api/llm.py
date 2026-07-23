@@ -141,6 +141,13 @@ def _openai_compat_completion(resolved, system, message, max_tokens):
         base_url=resolved["base_url"],
         timeout=60,
     )
+    # OpenAI's GPT-5+ models reject `max_tokens` and require
+    # `max_completion_tokens`. Local OpenAI-compatible servers (Ollama,
+    # LM Studio) only understand the older `max_tokens`, so branch on provider.
+    if resolved["provider"] == "openai":
+        token_kwargs = {"max_completion_tokens": max_tokens}
+    else:
+        token_kwargs = {"max_tokens": max_tokens}
     try:
         completion = client.chat.completions.create(
             model=resolved["model"],
@@ -148,7 +155,7 @@ def _openai_compat_completion(resolved, system, message, max_tokens):
                 {"role": "system", "content": system},
                 {"role": "user", "content": message},
             ],
-            max_tokens=max_tokens,
+            **token_kwargs,
         )
         return completion.choices[0].message.content
     except openai_sdk.AuthenticationError as e:
