@@ -14,23 +14,60 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 import os
+import sys
 
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Desktop mode: the Tauri launcher sets FINTRAX_DATA_DIR to a per-user
+# writable directory. When it's absent we're running the normal dev/web
+# server and everything below falls back to the original behavior.
+DATA_DIR = os.environ.get("FINTRAX_DATA_DIR")
+DESKTOP_MODE = bool(DATA_DIR)
+
+
+def _frontend_dist_dir():
+    """Location of the built React app.
+
+    In a PyInstaller onefile bundle the dist is unpacked under _MEIPASS;
+    in a plain checkout it lives at repo_root/frontend/dist.
+    """
+    base = Path(getattr(sys, "_MEIPASS", BASE_DIR.parent))
+    return base / "frontend" / "dist"
+
+
+# Uppercase so it's exposed on django.conf.settings (LazySettings only
+# proxies uppercase names). Used by WhiteNoise and the SPA catch-all view.
+FRONTEND_DIST_DIR = _frontend_dist_dir()
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-(wd-ecmggr!qxq&ey+pbj1%!^yva2v0&du874@5vvc-x*oat!1"
+if DESKTOP_MODE:
+    from django.core.management.utils import get_random_secret_key
+
+    _key_file = Path(DATA_DIR) / "secret_key.txt"
+    Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
+    if _key_file.exists():
+        SECRET_KEY = _key_file.read_text().strip()
+    else:
+        SECRET_KEY = get_random_secret_key()
+        _key_file.write_text(SECRET_KEY)
+else:
+    SECRET_KEY = "django-insecure-(wd-ecmggr!qxq&ey+pbj1%!^yva2v0&du874@5vvc-x*oat!1"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not DESKTOP_MODE
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"] if DESKTOP_MODE else ["*"]
+
+CSRF_TRUSTED_ORIGINS = (
+    ["http://127.0.0.1:8765", "http://localhost:8765"] if DESKTOP_MODE else []
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -63,6 +100,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -99,7 +137,7 @@ WSGI_APPLICATION = "backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": (Path(DATA_DIR) / "db.sqlite3") if DESKTOP_MODE else BASE_DIR / "db.sqlite3",
     }
 }
 
@@ -139,6 +177,22 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
+
+if DESKTOP_MODE:
+    # Collected admin/DRF assets live in the per-user data dir; WhiteNoise
+    # additionally serves the built React app (index.html, /assets/*) from
+    # the site root so the sidecar is fully self-contained.
+    STATIC_ROOT = Path(DATA_DIR) / "staticfiles"
+    WHITENOISE_ROOT = FRONTEND_DIST_DIR
+    WHITENOISE_INDEX_FILE = True
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+        },
+    }
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

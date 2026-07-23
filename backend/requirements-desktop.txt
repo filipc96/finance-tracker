@@ -1,0 +1,6 @@
+# Extra deps only needed to build/run the desktop (Tauri sidecar) app.
+# The web app uses requirements.txt; install this on top for packaging.
+-r requirements.txt
+whitenoise
+waitress
+pyinstaller

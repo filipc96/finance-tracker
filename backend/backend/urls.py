@@ -1,10 +1,25 @@
+from django.conf import settings
 from django.contrib import admin
-from django.urls import path, include
+from django.http import HttpResponse, JsonResponse
+from django.urls import path, re_path, include
 from api.views import ChangePasswordView, CreateUserView, GetUser
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+
+def health_view(request):
+    return JsonResponse({"status": "ok"})
+
+
+def spa_index(request):
+    """Serve the built React app's index.html so client-side routes
+    (e.g. /budgets, /settings) resolve on reload in desktop mode."""
+    index_file = settings.FRONTEND_DIST_DIR / "index.html"
+    return HttpResponse(index_file.read_bytes(), content_type="text/html")
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("health/", health_view, name="health"),
     path("api/user/register/", CreateUserView.as_view(), name="register"),
     path("api/user/", GetUser.as_view(), name="get-user"),
     path(
@@ -17,3 +32,13 @@ urlpatterns = [
     path("api-auth/", include("rest_framework.urls")),
     path("api/", include("api.urls")),
 ]
+
+# Desktop mode: Django serves the SPA. WhiteNoise handles real files
+# (/assets/*, /vite.svg, / -> index.html); this catch-all covers React
+# Router deep links that aren't files. Never active in dev/web mode.
+if settings.DESKTOP_MODE:
+    urlpatterns += [
+        re_path(
+            r"^(?!api/|admin/|static/|health/).*$", spa_index, name="spa-index"
+        ),
+    ]
