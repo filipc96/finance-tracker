@@ -8,7 +8,7 @@ import Button from "./ui/Button";
 
 const NEW_PREFIX = "new:";
 
-const ScanReceipt = ({ callback }) => {
+const ScanReceipt = ({ callback, className = "max-w-md" }) => {
   const [categories, setCategories] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -158,7 +158,9 @@ const ScanReceipt = ({ callback }) => {
     : "";
 
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-6">
+    <div
+      className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full h-auto p-6 ${className}`}
+    >
       <div className="flex flex-col gap-4">
         <h3>Scan Receipts</h3>
 

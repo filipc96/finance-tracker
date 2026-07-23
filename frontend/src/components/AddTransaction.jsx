@@ -9,7 +9,7 @@ import Input from "./ui/Input";
 import Select from "./ui/Select";
 import Button from "./ui/Button";
 
-const AddTransaction = ({ type, callback }) => {
+const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
   const [categories, setCategories] = useState([]);
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState("");
@@ -60,7 +60,9 @@ const AddTransaction = ({ type, callback }) => {
   };
 
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-6">
+    <div
+      className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full h-auto p-6 ${className}`}
+    >
       <form onSubmit={addTransaction} className="flex flex-col gap-4">
         <h3>Add {type === "expense" ? "Expense" : "Income"}</h3>
 

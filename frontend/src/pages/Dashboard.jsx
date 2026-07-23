@@ -123,7 +123,7 @@ const Dashboard = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 pb-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 pb-6 lg:grid-cols-5 lg:gap-x-4">
         <div className="flex flex-col gap-6 lg:col-span-3">
           <Card>
             <div className="mb-4">Expenses this year</div>
@@ -140,9 +140,9 @@ const Dashboard = () => {
         </div>
 
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <ScanReceipt callback={getData} />
-          <AddTransaction callback={getData} type="expense" />
-          <AddTransaction callback={getData} type="income" />
+          <ScanReceipt callback={getData} className="" />
+          <AddTransaction callback={getData} type="expense" className="" />
+          <AddTransaction callback={getData} type="income" className="" />
         </div>
       </div>
     </>
