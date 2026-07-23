@@ -12,15 +12,10 @@ const ScanReceipt = ({ callback }) => {
   const [categories, setCategories] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [draft, setDraft] = useState(null);
-
-  // Review-form fields (populated from the scan draft, then editable).
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState("");
-  const [category, setCategory] = useState("");
-  const [suggested, setSuggested] = useState("");
-  const [confidence, setConfidence] = useState(null);
+  const [scanTotal, setScanTotal] = useState(0);
+  const [scanDone, setScanDone] = useState(0);
+  // One editable draft per scanned photo.
+  const [drafts, setDrafts] = useState([]);
 
   const fileInput = useRef(null);
 
@@ -37,110 +32,150 @@ const ScanReceipt = ({ callback }) => {
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
   const reset = () => {
-    setDraft(null);
-    setName("");
-    setAmount("");
-    setDate("");
-    setCategory("");
-    setSuggested("");
-    setConfidence(null);
+    setDrafts([]);
+    setScanTotal(0);
+    setScanDone(0);
     if (fileInput.current) fileInput.current.value = "";
   };
 
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const updateDraft = (key, patch) =>
+    setDrafts((prev) =>
+      prev.map((d) => (d.key === key ? { ...d, ...patch } : d))
+    );
 
-    const formData = new FormData();
-    formData.append("image", file);
+  const removeDraft = (key) =>
+    setDrafts((prev) => prev.filter((d) => d.key !== key));
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (fileInput.current) fileInput.current.value = "";
+    if (files.length === 0) return;
+
+    setScanTotal(files.length);
+    setScanDone(0);
     setIsScanning(true);
-    api
-      .post("/api/receipts/scan/", formData)
-      .then(({ data }) => {
-        setName(data.name || "");
-        setAmount(data.amount || "");
-        setDate(data.date || format(new Date(), "yyyy-MM-dd"));
-        setSuggested(data.suggested_category || "");
-        setConfidence(data.confidence);
-        // Preselect the matched category; else offer to create the suggestion.
-        if (data.category) {
-          setCategory(String(data.category));
-        } else if (data.suggested_category) {
-          setCategory(NEW_PREFIX + data.suggested_category);
-        } else {
-          setCategory("");
-        }
-        setDraft(data);
-      })
-      .catch((error) =>
+
+    // Sequential: the OCR engine is a shared singleton and the LLM has rate
+    // limits, so one photo at a time. Drafts appear as each finishes.
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("image", file);
+      try {
+        const { data } = await api.post("/api/receipts/scan/", formData);
+        setDrafts((prev) => [
+          ...prev,
+          {
+            key: crypto.randomUUID(),
+            fileName: file.name,
+            name: data.name || "",
+            amount: data.amount || "",
+            date: data.date || format(new Date(), "yyyy-MM-dd"),
+            suggested: data.suggested_category || "",
+            confidence: data.confidence,
+            category: data.category
+              ? String(data.category)
+              : data.suggested_category
+              ? NEW_PREFIX + data.suggested_category
+              : "",
+          },
+        ]);
+      } catch (error) {
         toast.error(
-          error.response?.data?.error || "Couldn't read that receipt."
-        )
-      )
-      .finally(() => {
-        setIsScanning(false);
-        if (fileInput.current) fileInput.current.value = "";
-      });
+          `${file.name}: ${
+            error.response?.data?.error || "couldn't read that receipt."
+          }`
+        );
+      } finally {
+        setScanDone((n) => n + 1);
+      }
+    }
+
+    setIsScanning(false);
   };
 
-  const saveExpense = async (e) => {
-    e.preventDefault();
-    if (!name || !amount || !date || !category) {
-      toast.error("Fill in every field before saving.");
-      return;
+  const saveAll = async () => {
+    if (drafts.length === 0) return;
+    for (const d of drafts) {
+      if (!d.name || !d.amount || !d.date || !d.category) {
+        toast.error("Fill in every field on each receipt before saving.");
+        return;
+      }
     }
 
     setIsSaving(true);
+    // Two receipts can suggest the same new category — create it once.
+    const categoryCache = {};
+    const savedKeys = [];
     try {
-      let categoryId = category;
-      if (category.startsWith(NEW_PREFIX)) {
-        const newName = category.slice(NEW_PREFIX.length);
-        const { data } = await api.post("/api/categories/", {
-          name: newName,
+      for (const d of drafts) {
+        let categoryId = d.category;
+        if (String(d.category).startsWith(NEW_PREFIX)) {
+          const newName = d.category.slice(NEW_PREFIX.length);
+          const cacheKey = newName.toLowerCase();
+          if (categoryCache[cacheKey]) {
+            categoryId = categoryCache[cacheKey];
+          } else {
+            const { data } = await api.post("/api/categories/", {
+              name: newName,
+              type: "expense",
+            });
+            categoryId = data.id;
+            categoryCache[cacheKey] = data.id;
+          }
+        }
+
+        await api.post("/api/transactions/", {
+          name: d.name,
           type: "expense",
+          date: d.date,
+          amount: d.amount,
+          category: categoryId,
         });
-        categoryId = data.id;
-        await loadCategories();
+        savedKeys.push(d.key);
       }
 
-      await api.post("/api/transactions/", {
-        name,
-        type: "expense",
-        date,
-        amount,
-        category: categoryId,
-      });
-      toast.success("Expense added from receipt.");
+      toast.success(
+        `Added ${savedKeys.length} expense${
+          savedKeys.length === 1 ? "" : "s"
+        } from receipts.`
+      );
       reset();
       if (callback) callback();
     } catch {
-      toast.error("Failed to save the expense.");
+      // Drop the ones that made it so a retry only reprocesses the rest.
+      setDrafts((prev) => prev.filter((d) => !savedKeys.includes(d.key)));
+      await loadCategories();
+      if (savedKeys.length && callback) callback();
+      toast.error("Some receipts couldn't be saved. Review the rest and retry.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const lowConfidence = confidence !== null && confidence < 0.6;
+  const hasDrafts = drafts.length > 0;
+  const progressLabel = isScanning
+    ? `Reading receipt ${Math.min(scanDone + 1, scanTotal)} of ${scanTotal}…`
+    : "";
 
   return (
     <div className="flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-6">
       <div className="flex flex-col gap-4">
-        <h3>Scan Receipt</h3>
+        <h3>Scan Receipts</h3>
 
         <input
           ref={fileInput}
           type="file"
           accept="image/*"
-          capture="environment"
+          multiple
           className="hidden"
-          onChange={handleFile}
+          onChange={handleFiles}
         />
 
-        {!draft && (
+        {!hasDrafts && (
           <>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Snap or upload a photo of a receipt. It's read on your machine and
-              turned into an expense you can review before saving.
+              Upload one or several receipt photos. Each is read on your machine
+              and turned into an expense you can review before saving.
             </p>
             <Button
               type="button"
@@ -149,68 +184,117 @@ const ScanReceipt = ({ callback }) => {
               className="w-full"
               onClick={() => fileInput.current?.click()}
             >
-              {isScanning ? "Reading receipt…" : "Choose receipt photo"}
+              {isScanning ? progressLabel : "Choose receipt photos"}
             </Button>
           </>
         )}
 
-        {draft && (
-          <form onSubmit={saveExpense} className="flex flex-col gap-4">
-            {lowConfidence && (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                Low confidence on this scan — double-check the amount and date.
+        {hasDrafts && (
+          <div className="flex flex-col gap-4">
+            {isScanning && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {progressLabel}
               </p>
             )}
 
-            <Input
-              label="Description"
-              type="text"
-              placeholder="Merchant"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                label="Amount"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
-              <Input
-                label="Date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <Select
-              label="Category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              <option value="">Select category</option>
-              {suggested &&
+            {drafts.map((d) => {
+              const lowConfidence =
+                d.confidence !== null &&
+                d.confidence !== undefined &&
+                d.confidence < 0.6;
+              const showCreate =
+                d.suggested &&
                 !expenseCategories.some(
-                  (c) => c.name.toLowerCase() === suggested.toLowerCase()
-                ) && (
-                  <option value={NEW_PREFIX + suggested}>
-                    + Create “{suggested}”
-                  </option>
-                )}
-              {expenseCategories.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+                  (c) => c.name.toLowerCase() === d.suggested.toLowerCase()
+                );
+              return (
+                <div
+                  key={d.key}
+                  className="flex flex-col gap-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-gray-400 dark:text-gray-500">
+                      {d.fileName}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-gray-400 hover:text-red-500"
+                      onClick={() => removeDraft(d.key)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {lowConfidence && (
+                    <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                      Low confidence — double-check the amount and date.
+                    </p>
+                  )}
+
+                  <Input
+                    label="Description"
+                    type="text"
+                    placeholder="Merchant"
+                    value={d.name}
+                    onChange={(e) => updateDraft(d.key, { name: e.target.value })}
+                    required
+                  />
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={d.amount}
+                      onChange={(e) =>
+                        updateDraft(d.key, { amount: e.target.value })
+                      }
+                      required
+                    />
+                    <Input
+                      label="Date"
+                      type="date"
+                      value={d.date}
+                      onChange={(e) =>
+                        updateDraft(d.key, { date: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+
+                  <Select
+                    label="Category"
+                    value={d.category}
+                    onChange={(e) =>
+                      updateDraft(d.key, { category: e.target.value })
+                    }
+                  >
+                    <option value="">Select category</option>
+                    {showCreate && (
+                      <option value={NEW_PREFIX + d.suggested}>
+                        + Create “{d.suggested}”
+                      </option>
+                    )}
+                    {expenseCategories.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              className="self-start text-sm text-primary-600 hover:underline disabled:opacity-50"
+              onClick={() => fileInput.current?.click()}
+              disabled={isScanning || isSaving}
+            >
+              + Add more photos
+            </button>
 
             <div className="flex gap-3">
               <Button
@@ -218,19 +302,23 @@ const ScanReceipt = ({ callback }) => {
                 variant="ghost"
                 className="flex-1"
                 onClick={reset}
+                disabled={isSaving}
               >
-                Discard
+                Discard all
               </Button>
               <Button
-                type="submit"
+                type="button"
                 variant="secondary"
                 isLoading={isSaving}
                 className="flex-1"
+                onClick={saveAll}
               >
-                Save expense
+                {`Save ${drafts.length} expense${
+                  drafts.length === 1 ? "" : "s"
+                }`}
               </Button>
             </div>
-          </form>
+          </div>
         )}
       </div>
     </div>
