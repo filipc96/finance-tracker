@@ -6,6 +6,7 @@ import NetWorthChart from "../components/NetWorthChart";
 import IncomeExpenseChart from "../components/IncomeExpenseChart";
 import CategoryTrendsChart from "../components/CategoryTrendsChart";
 import SavingsRateChart from "../components/SavingsRateChart";
+import ChartErrorBoundary from "../components/ChartErrorBoundary";
 import Card from "../components/ui/Card";
 import api from "../api";
 
@@ -27,45 +28,63 @@ const Analytics = () => {
 
       <div className="flex flex-col gap-6 py-6 w-full max-w-5xl">
         <Card>
-          <NetWorthChart />
+          <ChartErrorBoundary>
+            <NetWorthChart />
+          </ChartErrorBoundary>
         </Card>
 
         <Card>
-          <IncomeExpenseChart
-            summary={summary}
-            year={year}
-            onYearChange={setYear}
-          />
+          <ChartErrorBoundary>
+            <IncomeExpenseChart
+              summary={summary}
+              year={year}
+              onYearChange={setYear}
+            />
+          </ChartErrorBoundary>
         </Card>
 
         <Card>
-          <SavingsRateChart summary={summary} />
+          <ChartErrorBoundary>
+            <SavingsRateChart summary={summary} />
+          </ChartErrorBoundary>
         </Card>
 
         <Card>
-          <CategoryTrendsChart />
+          <ChartErrorBoundary>
+            <CategoryTrendsChart />
+          </ChartErrorBoundary>
         </Card>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card title="Expenses this year">
-            <Chart type="expense" />
+            <ChartErrorBoundary>
+              <Chart type="expense" />
+            </ChartErrorBoundary>
           </Card>
           <Card title="Income this year">
-            <Chart type="income" />
+            <ChartErrorBoundary>
+              <Chart type="income" />
+            </ChartErrorBoundary>
           </Card>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card title="Expenses by category">
-            <PieChart type="expense" />
+            <ChartErrorBoundary>
+              <PieChart type="expense" />
+            </ChartErrorBoundary>
           </Card>
           <Card title="Income by category">
-            <PieChart type="income" />
+            <ChartErrorBoundary>
+              <PieChart type="income" />
+            </ChartErrorBoundary>
           </Card>
         </div>
 
         <Card title="Transactions over time">
-          <Graph />
+          <ChartErrorBoundary>
+            <Graph />
+          </ChartErrorBoundary>
         </Card>
       </div>
     </>
