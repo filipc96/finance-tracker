@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../api";
 import Button from "../components/ui/Button";
+import { formatAmount } from "../utils/formatCurrency";
 
 const SummaryCard = ({ label, value, colored }) => {
   const number = Number(value);
@@ -14,7 +15,9 @@ const SummaryCard = ({ label, value, colored }) => {
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
       <div className="text-sm text-gray-500 dark:text-gray-400">{label}</div>
-      <div className={`text-lg font-semibold ${colorClass}`}>{value}</div>
+      <div className={`text-lg font-semibold ${colorClass}`}>
+        {formatAmount(value)}
+      </div>
     </div>
   );
 };
@@ -139,12 +142,12 @@ const Stocks = () => {
                           </td>
                           <td className="py-3 pr-4 text-right">{p.quantity}</td>
                           <td className="py-3 pr-4 text-right">
-                            {p.average_price}
+                            {formatAmount(p.average_price)}
                           </td>
                           <td className="py-3 pr-4 text-right">
-                            {p.current_price}
+                            {formatAmount(p.current_price)}
                           </td>
-                          <td className="py-3 pr-4 text-right">{p.value}</td>
+                          <td className="py-3 pr-4 text-right">{formatAmount(p.value)}</td>
                           <td
                             className={`py-3 text-right ${
                               pl >= 0
@@ -152,7 +155,7 @@ const Stocks = () => {
                                 : "text-red-600 dark:text-red-400"
                             }`}
                           >
-                            {p.unrealized_pl}
+                            {formatAmount(p.unrealized_pl)}
                           </td>
                         </tr>
                       );

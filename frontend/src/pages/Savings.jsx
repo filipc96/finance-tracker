@@ -15,6 +15,7 @@ import api from "../api";
 import Button from "../components/ui/Button";
 import { useTheme } from "../contexts/ThemeContext";
 import { buildLineOptions } from "../utils/chartTheme";
+import { formatAmount } from "../utils/formatCurrency";
 
 ChartJS.register(
   CategoryScale,
@@ -69,7 +70,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
         </button>
       </div>
 
-      <div className="text-2xl font-bold">{account.balance}</div>
+      <div className="text-2xl font-bold">{formatAmount(account.balance)}</div>
 
       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
         {editingRate ? (

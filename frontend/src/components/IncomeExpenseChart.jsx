@@ -2,6 +2,7 @@ import { Chart as ChartJS, BarElement } from "chart.js";
 import { Chart } from "react-chartjs-2";
 import { useTheme } from "../contexts/ThemeContext";
 import { buildLineOptions } from "../utils/chartTheme";
+import { DEFAULT_CURRENCY } from "../utils/formatCurrency";
 
 ChartJS.register(BarElement);
 
@@ -68,7 +69,11 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
           ))}
         </select>
       </div>
-      <Chart type="bar" data={data} options={buildLineOptions(darkMode)} />
+      <Chart
+        type="bar"
+        data={data}
+        options={buildLineOptions(darkMode, { currency: DEFAULT_CURRENCY })}
+      />
     </>
   );
 };

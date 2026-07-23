@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
 import Button from "./ui/Button";
+import { formatAmount } from "../utils/formatCurrency";
 
 const emptyForm = {
   name: "",
@@ -155,7 +156,7 @@ const RecurringManager = ({ onMaterialized }) => {
               className="flex items-center justify-between py-2 text-sm"
             >
               <span className="flex-1 font-medium">{item.name}</span>
-              <span className="w-24">{item.amount}</span>
+              <span className="w-24">{formatAmount(item.amount)}</span>
               <span className="w-24 capitalize">{item.type}</span>
               <span className="w-28">{item.category_name}</span>
               <span className="w-24 capitalize">{item.frequency}</span>

@@ -13,6 +13,7 @@ import {
 import api from "../api";
 import { useTheme } from "../contexts/ThemeContext";
 import { buildLineOptions } from "../utils/chartTheme";
+import { DEFAULT_CURRENCY } from "../utils/formatCurrency";
 
 ChartJS.register(
   CategoryScale,
@@ -89,7 +90,10 @@ const NetWorthChart = () => {
           each day.
         </p>
       ) : (
-        <Line data={data} options={buildLineOptions(darkMode)} />
+        <Line
+          data={data}
+          options={buildLineOptions(darkMode, { currency: DEFAULT_CURRENCY })}
+        />
       )}
     </>
   );

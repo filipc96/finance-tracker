@@ -16,16 +16,40 @@ export const getChartTheme = (darkMode) => ({
   pieBorderColor: darkMode ? "#1a1c23" : "#ffffff",
 });
 
-export const buildLineOptions = (darkMode, extra = {}) => {
+// Compact money label for axis ticks: 187247.73 -> "187,248". Full precision
+// with the currency label is used in tooltips instead.
+const compactMoney = (value) =>
+  Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+const fullMoney = (value, currency) =>
+  `${Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`;
+
+// Pass `currency` to label the y-axis ticks and tooltips (e.g. net worth in
+// RSD). `extra` is deep-ish merged so callers can override without dropping
+// the theme colors / currency callbacks configured here.
+export const buildLineOptions = (darkMode, { currency, ...extra } = {}) => {
   const { textColor, gridColor } = getChartTheme(darkMode);
   return {
     responsive: true,
     tension: 0.4,
+    ...extra,
     plugins: {
       legend: {
         position: "top",
         labels: { color: textColor },
       },
+      ...(currency && {
+        tooltip: {
+          callbacks: {
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${fullMoney(ctx.parsed.y, currency)}`,
+          },
+        },
+      }),
+      ...extra.plugins,
     },
     scales: {
       x: {
@@ -34,9 +58,12 @@ export const buildLineOptions = (darkMode, extra = {}) => {
       },
       y: {
         grid: { color: gridColor },
-        ticks: { color: textColor },
+        ticks: {
+          color: textColor,
+          ...(currency && { callback: (v) => compactMoney(v) }),
+        },
       },
+      ...extra.scales,
     },
-    ...extra,
   };
 };

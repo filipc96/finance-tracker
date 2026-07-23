@@ -2,6 +2,7 @@ import { useState } from "react";
 import { faTerminal } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
+import { formatAmount } from "../utils/formatCurrency";
 
 const HELP_LINES = [
   "Available commands:",
@@ -62,7 +63,7 @@ const Terminal = ({ isOpen, setIsOpen }) => {
         category: category.id,
         type,
       });
-      appendLines(`Added ${type} "${name}": ${amount.toFixed(2)} (${category.name})`);
+      appendLines(`Added ${type} "${name}": ${formatAmount(amount)} (${category.name})`);
     } catch (error) {
       appendLines(
         `Error: ${error.response?.data?.error || "failed to add transaction."}`

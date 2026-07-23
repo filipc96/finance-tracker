@@ -1,5 +1,6 @@
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { formatAmount } from "../utils/formatCurrency";
 
 const TransactionTable = ({ transactions, onDelete }) => {
   return (
@@ -37,12 +38,12 @@ const TransactionTable = ({ transactions, onDelete }) => {
                 {transaction.type === "expense" ? (
                   <td className="px-6 py-4 text text-red-500">
                     {" "}
-                    -{transaction.amount}
+                    -{formatAmount(transaction.amount)}
                   </td>
                 ) : (
                   <td className="px-6 py-4 text-green-500">
                     {" "}
-                    +{transaction.amount}
+                    +{formatAmount(transaction.amount)}
                   </td>
                 )}
                 <td className="px-6 py-4">{transaction.date}</td>

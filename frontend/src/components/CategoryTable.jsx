@@ -1,5 +1,6 @@
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { formatAmount } from "../utils/formatCurrency";
 
 const CategoryTable = ({ categories, onDelete }) => {
   return (
@@ -31,12 +32,12 @@ const CategoryTable = ({ categories, onDelete }) => {
                 {category.type === "expense" ? (
                   <td className="px-6 py-4 text text-red-500">
                     {" "}
-                    -{category.transactions_sum}
+                    -{formatAmount(category.transactions_sum)}
                   </td>
                 ) : (
                   <td className="px-6 py-4 text-green-500">
                     {" "}
-                    +{category.transactions_sum}
+                    +{formatAmount(category.transactions_sum)}
                   </td>
                 )}
                 <td className="px-6 py-4">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
 import Button from "../components/ui/Button";
+import { formatAmount } from "../utils/formatCurrency";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
@@ -51,7 +52,7 @@ const BudgetBar = ({ budget, onDelete, onUpdate }) => {
           ) : (
             <>
               <span className="text-sm text-gray-600 dark:text-gray-300">
-                {spent.toFixed(2)} / {limit.toFixed(2)}
+                {formatAmount(spent)} / {formatAmount(limit)}
               </span>
               <button
                 onClick={() => setEditing(true)}
