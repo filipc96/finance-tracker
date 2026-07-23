@@ -127,7 +127,15 @@ def parse_receipt(text, resolved, category_names):
     `resolved` comes from llm.resolve_llm(). Raises ReceiptError on bad JSON.
     """
     system = _build_prompt(category_names)
-    raw = get_chat_completion(resolved, system, text, max_tokens=400)
+    # Budget must clear the reasoning overhead of reasoning models (e.g.
+    # gpt-5-mini spends ~250-400 tokens thinking before emitting the JSON);
+    # too low and the whole budget goes to reasoning, leaving empty content.
+    raw = get_chat_completion(resolved, system, text, max_tokens=1500)
+    if not raw or not raw.strip():
+        raise ReceiptError(
+            "The model returned an empty response. Try again, or pick a "
+            "different model in Settings."
+        )
     try:
         data = json.loads(_strip_fences(raw))
     except (json.JSONDecodeError, TypeError) as exc:

@@ -117,8 +117,13 @@ def resolve_llm(settings, provider=None, model=None):
     }
 
 
-def get_chat_completion(resolved, system, message, max_tokens=500):
-    """Send one chat turn and return the response text."""
+def get_chat_completion(resolved, system, message, max_tokens=1500):
+    """Send one chat turn and return the response text.
+
+    Default budget is generous because reasoning models (e.g. gpt-5-mini)
+    spend part of the completion budget on hidden reasoning tokens; too small
+    a budget can leave nothing for the visible answer.
+    """
     if resolved["kind"] == "anthropic":
         return _anthropic_completion(resolved, system, message, max_tokens)
     return _openai_compat_completion(resolved, system, message, max_tokens)
