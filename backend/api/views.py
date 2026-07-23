@@ -56,6 +56,7 @@ from .llm import (
     list_providers,
     resolve_llm,
 )
+from .receipts import ReceiptError, extract_text, parse_receipt
 
 
 class CreateUserView(generics.CreateAPIView):
@@ -932,6 +933,99 @@ class ChatProviders(APIView):
                     "model": settings.llm_model,
                 },
                 "providers": list_providers(settings),
+            }
+        )
+
+
+class ReceiptScanView(APIView):
+    """OCR a receipt image + LLM-extract a single expense draft.
+
+    Multipart upload under `image`. Returns a draft the client reviews and
+    then saves via the normal /api/transactions/ endpoint. Saves nothing here.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+
+    def post(self, request):
+        image = request.FILES.get("image")
+        if image is None:
+            return Response(
+                {"error": "No image uploaded."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if image.size > self.MAX_BYTES:
+            return Response(
+                {"error": "Image too large (max 10 MB)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        expense_categories = list(
+            Category.objects.filter(user=request.user, type="expense")
+        )
+        category_names = [c.name for c in expense_categories]
+
+        resolved = None
+        try:
+            text = extract_text(image.read())
+            resolved = resolve_llm(
+                request.user.settings,
+                provider=request.data.get("provider"),
+                model=request.data.get("model"),
+            )
+            draft = parse_receipt(text, resolved, category_names)
+        except ReceiptError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except LLMConfigError as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except LLMAuthError:
+            return Response(
+                {"error": f"Invalid {resolved['label']} API key."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except LLMRateLimitError:
+            return Response(
+                {
+                    "error": f"{resolved['label']} rate limit reached. "
+                    "Try again shortly."
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except LLMConnectionError as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY
+            )
+        except LLMError:
+            return Response(
+                {"error": "The LLM request failed. Try again later."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Match the suggested category to one the user already has.
+        matched = None
+        suggested = draft["suggested_category"]
+        if suggested:
+            for category in expense_categories:
+                if category.name.casefold() == suggested.casefold():
+                    matched = category.id
+                    break
+
+        return Response(
+            {
+                "name": draft["merchant"],
+                "amount": draft["total"],
+                "date": draft["date"],
+                "currency": draft["currency"],
+                "category": matched,
+                "suggested_category": suggested,
+                "confidence": draft["confidence"],
             }
         )
 

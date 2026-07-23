@@ -51,12 +51,24 @@ hiddenimports += [
 ]
 
 # --- heavy third-party SDKs (pydantic / httpx / distro under the hood) -----
+# rapidocr_onnxruntime + onnxruntime + cv2 ship the OCR onnx models and config
+# YAML as package data; collect_all pulls those so OCR works fully offline in
+# the bundled exe (no model re-download at runtime).
 binaries = []
-for pkg in ("openai", "anthropic"):
+for pkg in (
+    "openai",
+    "anthropic",
+    "rapidocr_onnxruntime",
+    "onnxruntime",
+    "cv2",
+    "PIL",
+):
     pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
     datas += pkg_datas
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
+
+hiddenimports += ["numpy"]
 
 
 a = Analysis(

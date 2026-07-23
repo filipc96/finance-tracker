@@ -1071,3 +1071,155 @@ class FxTests(APITestCase):
         mock_get.side_effect = _requests.RequestException("boom")
         with self.assertRaises(FxError):
             to_base(Decimal("1.00"), "USD")
+
+
+class ReceiptScanTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+        self.user.settings.open_ai_api_key = "sk-test"
+        self.user.settings.save()
+
+    def _image(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(
+            "receipt.jpg", b"fake-bytes", content_type="image/jpeg"
+        )
+
+    def _post(self, extra=None):
+        data = {"image": self._image()}
+        if extra:
+            data.update(extra)
+        return self.client.post("/api/receipts/scan/", data, format="multipart")
+
+    @patch("api.views.extract_text", return_value="MAXI\nTOTAL 2340")
+    @patch(
+        "api.receipts.get_chat_completion",
+        return_value=(
+            '{"merchant": "Maxi", "date": "2026-07-20", "total": 2340, '
+            '"currency": "RSD", "suggested_category": "Groceries", '
+            '"confidence": 0.9}'
+        ),
+    )
+    def test_scan_success_matches_category(self, mock_llm, mock_ocr):
+        cat = Category.objects.create(
+            user=self.user, name="Groceries", type="expense"
+        )
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["name"], "Maxi")
+        self.assertEqual(response.data["amount"], "2340.00")
+        self.assertEqual(response.data["date"], "2026-07-20")
+        self.assertEqual(response.data["category"], cat.id)
+        # OCR text is what the LLM is asked about.
+        self.assertEqual(mock_llm.call_args.args[2], "MAXI\nTOTAL 2340")
+
+    @patch("api.views.extract_text", return_value="text")
+    @patch(
+        "api.receipts.get_chat_completion",
+        return_value='{"merchant": "X", "total": 5, '
+        '"suggested_category": "groceries"}',
+    )
+    def test_scan_category_match_case_insensitive(self, mock_llm, mock_ocr):
+        cat = Category.objects.create(
+            user=self.user, name="Groceries", type="expense"
+        )
+        response = self._post()
+        self.assertEqual(response.data["category"], cat.id)
+
+    @patch("api.views.extract_text", return_value="text")
+    @patch(
+        "api.receipts.get_chat_completion",
+        return_value='{"merchant": "X", "total": 5, '
+        '"suggested_category": "Electronics"}',
+    )
+    def test_scan_unmatched_category_passthrough(self, mock_llm, mock_ocr):
+        response = self._post()
+        self.assertIsNone(response.data["category"])
+        self.assertEqual(response.data["suggested_category"], "Electronics")
+
+    def test_scan_requires_image(self):
+        response = self.client.post("/api/receipts/scan/", {}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("api.views.extract_text")
+    def test_scan_ocr_empty_returns_422(self, mock_ocr):
+        from .receipts import ReceiptError
+
+        mock_ocr.side_effect = ReceiptError("No text found in the image.")
+        response = self._post()
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+        self.assertIn("No text", response.data["error"])
+
+    @patch("api.views.extract_text", return_value="text")
+    @patch("api.receipts.get_chat_completion", return_value="not json at all")
+    def test_scan_bad_json_returns_422(self, mock_llm, mock_ocr):
+        response = self._post()
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+
+    @patch("api.views.extract_text", return_value="text")
+    @patch("api.receipts.get_chat_completion", return_value='{"total": 5}')
+    def test_scan_missing_openai_key_400(self, mock_llm, mock_ocr):
+        self.user.settings.open_ai_api_key = ""
+        self.user.settings.save()
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_scan_requires_auth(self):
+        self.client.force_authenticate(None)
+        response = self._post()
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class ReceiptUnitTests(APITestCase):
+    def test_coerce_total_formats(self):
+        from .receipts import _coerce_total
+
+        self.assertEqual(_coerce_total("1.234,56"), Decimal("1234.56"))
+        self.assertEqual(_coerce_total("1,234.56"), Decimal("1234.56"))
+        self.assertEqual(_coerce_total("€12.30"), Decimal("12.30"))
+        self.assertEqual(_coerce_total("12,30"), Decimal("12.30"))
+        self.assertEqual(_coerce_total("2340"), Decimal("2340.00"))
+        self.assertIsNone(_coerce_total("n/a"))
+        self.assertIsNone(_coerce_total(None))
+
+    def test_strip_fences(self):
+        from .receipts import _strip_fences
+
+        self.assertEqual(_strip_fences('```json\n{"a": 1}\n```'), '{"a": 1}')
+        self.assertEqual(_strip_fences('{"a": 1}'), '{"a": 1}')
+
+    def test_coerce_date_fallback_to_today(self):
+        from .receipts import _coerce_date
+
+        self.assertEqual(_coerce_date("2026-07-20"), "2026-07-20")
+        self.assertEqual(_coerce_date(""), date.today().isoformat())
+        self.assertEqual(_coerce_date("garbage"), date.today().isoformat())
+
+    @patch(
+        "api.receipts.get_chat_completion",
+        return_value='```json\n{"merchant": "Shop", "date": "2026-07-20", '
+        '"total": "1.234,56", "currency": "eur", '
+        '"suggested_category": "Dining", "confidence": "0.8"}\n```',
+    )
+    def test_parse_receipt_full(self, mock_llm):
+        from .receipts import parse_receipt
+
+        draft = parse_receipt("ocr text", {"any": "resolved"}, ["Dining"])
+        self.assertEqual(draft["merchant"], "Shop")
+        self.assertEqual(draft["total"], "1234.56")
+        self.assertEqual(draft["currency"], "EUR")
+        self.assertEqual(draft["suggested_category"], "Dining")
+        self.assertEqual(draft["confidence"], 0.8)
+
+    @patch("api.receipts.get_chat_completion", return_value="nonsense")
+    def test_parse_receipt_bad_json_raises(self, mock_llm):
+        from .receipts import ReceiptError, parse_receipt
+
+        with self.assertRaises(ReceiptError):
+            parse_receipt("ocr", {}, [])

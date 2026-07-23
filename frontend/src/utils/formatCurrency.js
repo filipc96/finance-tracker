@@ -14,9 +14,11 @@ export function formatCurrency(value, currency = DEFAULT_CURRENCY) {
   return `${formatAmount(n)} ${currency}`;
 }
 
-// Rounded integer with grouping, no decimals, no currency: "219,370". Non-numeric -> "—".
-export function formatWhole(value) {
+// Rounded integer with grouping, no decimals: "219,370" or "219,370 RSD"
+// when a currency is passed. Non-numeric -> "—".
+export function formatWhole(value, currency = "") {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-  return Math.round(n).toLocaleString();
+  const s = Math.round(n).toLocaleString();
+  return currency ? `${s} ${currency}` : s;
 }

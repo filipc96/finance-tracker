@@ -8,10 +8,15 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import StatCard from "../components/StatCard";
 import AddTransaction from "../components/AddTransaction";
+import ScanReceipt from "../components/ScanReceipt";
 import Chart from "../components/Chart";
 import ChartErrorBoundary from "../components/ChartErrorBoundary";
 import Card from "../components/ui/Card";
-import { formatCurrency, formatWhole } from "../utils/formatCurrency";
+import {
+  formatCurrency,
+  formatWhole,
+  DEFAULT_CURRENCY,
+} from "../utils/formatCurrency";
 import api from "../api";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
@@ -80,7 +85,7 @@ const Dashboard = () => {
         <StatCard
           icon={faScaleBalanced}
           label="Net Worth"
-          value={formatWhole(netWorth)}
+          value={formatWhole(netWorth, DEFAULT_CURRENCY)}
           subtext="Balance + savings + stocks"
         />
         <StatCard
@@ -135,6 +140,7 @@ const Dashboard = () => {
         </div>
 
         <div className="flex flex-col gap-6 lg:col-span-2">
+          <ScanReceipt callback={getData} />
           <AddTransaction callback={getData} type="expense" />
           <AddTransaction callback={getData} type="income" />
         </div>
