@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fintrax</title>
+    <style>
+      html, body {
+        margin: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .box { text-align: center; }
+      .dot {
+        width: 40px; height: 40px; margin: 0 auto 16px;
+        border: 4px solid #1e293b; border-top-color: #6366f1;
+        border-radius: 50%; animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <!-- Splash only. The real UI window is created from Rust once the
+         Django sidecar reports ready, loading http://127.0.0.1:<port>/. -->
+    <div class="box">
+      <div class="dot"></div>
+      <div>Starting Fintrax…</div>
+    </div>
+  </body>
+</html>

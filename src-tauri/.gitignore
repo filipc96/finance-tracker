@@ -1,0 +1,11 @@
+# Rust / Tauri build output
+/target/
+
+# Tauri codegen (schemas, generated capabilities)
+/gen/
+
+# Bundled sidecar binaries are build artifacts (produced by desktop/build.ps1
+# from the PyInstaller output). Regenerated per build; not source.
+/binaries/*.exe
+
+# The frontendDist splash is real source and IS committed (ui/).
