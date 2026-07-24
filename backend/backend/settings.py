@@ -42,6 +42,10 @@ def _frontend_dist_dir():
 # proxies uppercase names). Used by WhiteNoise and the SPA catch-all view.
 FRONTEND_DIST_DIR = _frontend_dist_dir()
 
+# Idle timeout (seconds) after which an unlocked vault drops its in-memory DEK
+# and the user must re-enter their master password. 0 disables idle re-locking.
+VAULT_IDLE_TIMEOUT_SECONDS = 15 * 60
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/

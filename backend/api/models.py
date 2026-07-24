@@ -119,6 +119,34 @@ class Category(models.Model):
         return self.name
 
 
+# Starter categories seeded on registration so a new user can add a transaction
+# immediately instead of hitting a category-less form on first launch. Users are
+# free to rename or delete any of these.
+DEFAULT_CATEGORIES = (
+    ("Groceries", "expense"),
+    ("Rent", "expense"),
+    ("Utilities", "expense"),
+    ("Transport", "expense"),
+    ("Dining Out", "expense"),
+    ("Entertainment", "expense"),
+    ("Healthcare", "expense"),
+    ("Shopping", "expense"),
+    ("Salary", "income"),
+    ("Other Income", "income"),
+)
+
+
+@receiver(post_save, sender=User)
+def seed_default_categories(sender, instance, created, **kwargs):
+    if created:
+        Category.objects.bulk_create(
+            [
+                Category(user=instance, name=name, type=type)
+                for name, type in DEFAULT_CATEGORIES
+            ]
+        )
+
+
 class Transaction(models.Model):
 
     TYPE_CHOICES = [

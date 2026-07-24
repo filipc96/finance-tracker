@@ -30,7 +30,7 @@ urlpatterns = [
     path(
         "categories/delete/<int:pk>",
         views.CategoryDelete.as_view(),
-        name="transaction-delete",
+        name="category-delete",
     ),
     path(
         "transactions/monthly-sum/<str:transaction_type>/<int:year>/",

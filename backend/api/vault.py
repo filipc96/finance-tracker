@@ -19,7 +19,9 @@ picks up the current thread's DEK when one is set.
 import base64
 import os
 import threading
+import time
 
+from django.conf import settings as dj_settings
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
@@ -92,27 +94,62 @@ def unwrap(token: str, key: bytes) -> bytes:
 # --- in-memory session store (never persisted) -----------------------------
 
 _UNLOCKED: dict[int, bytes] = {}
+_LAST_SEEN: dict[int, float] = {}  # user_id -> monotonic time of last activity
 _LOCK = threading.Lock()
 _local = threading.local()
+
+# Idle window before the in-memory DEK is dropped and the user must re-enter
+# their password. Overridable via settings.VAULT_IDLE_TIMEOUT_SECONDS; a value
+# of 0 (or less) disables idle re-locking.
+_DEFAULT_IDLE_TIMEOUT = 15 * 60
+
+
+def _idle_timeout() -> float:
+    return float(getattr(dj_settings, "VAULT_IDLE_TIMEOUT_SECONDS", _DEFAULT_IDLE_TIMEOUT))
+
+
+def _still_unlocked(user_id: int, now: float) -> bool:
+    """Drop the DEK if idle past the timeout. Caller must hold ``_LOCK``.
+
+    Returns whether the user remains unlocked after the check.
+    """
+    if user_id not in _UNLOCKED:
+        return False
+    timeout = _idle_timeout()
+    if timeout > 0 and now - _LAST_SEEN.get(user_id, 0.0) > timeout:
+        _UNLOCKED.pop(user_id, None)
+        _LAST_SEEN.pop(user_id, None)
+        return False
+    return True
 
 
 def unlock_user(user_id: int, dek: bytes) -> None:
     with _LOCK:
         _UNLOCKED[user_id] = dek
+        _LAST_SEEN[user_id] = time.monotonic()
 
 
 def lock_user(user_id: int) -> None:
     with _LOCK:
         _UNLOCKED.pop(user_id, None)
+        _LAST_SEEN.pop(user_id, None)
 
 
 def is_unlocked(user_id: int) -> bool:
+    # A pure state check; it must not count as activity, or polling the vault
+    # state would keep the DEK alive forever.
     with _LOCK:
-        return user_id in _UNLOCKED
+        return _still_unlocked(user_id, time.monotonic())
 
 
 def get_dek(user_id: int):
+    # Called by the auth layer on every authenticated request (see auth.py), so
+    # a hit here is genuine user activity: refresh the idle clock on the way out.
     with _LOCK:
+        now = time.monotonic()
+        if not _still_unlocked(user_id, now):
+            return None
+        _LAST_SEEN[user_id] = now
         return _UNLOCKED.get(user_id)
 
 

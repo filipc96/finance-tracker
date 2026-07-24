@@ -8,7 +8,7 @@ import {
   faGroupArrowsRotate,
   faChartBar,
   faHistory,
-  faCalendar,
+  faGear,
   faSignOut,
   faWallet,
   faArrowTrendUp,
@@ -58,7 +58,7 @@ const menuItems = [
   },
   {
     name: "Settings",
-    icon: faCalendar,
+    icon: faGear,
     path: "/settings",
     element: <Settings />,
   },

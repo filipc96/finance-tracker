@@ -3,8 +3,10 @@ import toast from "react-hot-toast";
 import api from "../api";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import { useCurrency } from "../contexts/CurrencyContext";
 
 const MyAccount = () => {
+  const { baseCurrency } = useCurrency();
   const [user, setUser] = useState(null);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -49,7 +51,7 @@ const MyAccount = () => {
       <h2>My Account</h2>
 
       <div className="flex flex-col gap-8 py-6 max-w-2xl">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               Username
@@ -64,6 +66,15 @@ const MyAccount = () => {
             </div>
             <div className="text-lg font-semibold">
               {user ? user.balance : "…"}
+            </div>
+          </div>
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Base currency
+            </div>
+            <div className="text-lg font-semibold">{baseCurrency}</div>
+            <div className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+              Locked · set at signup
             </div>
           </div>
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">

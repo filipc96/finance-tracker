@@ -13,11 +13,10 @@ import ScanReceipt from "../components/ScanReceipt";
 import Chart from "../components/Chart";
 import ChartErrorBoundary from "../components/ChartErrorBoundary";
 import Card from "../components/ui/Card";
-import { formatMoney, formatWhole } from "../utils/formatCurrency";
+import { formatWhole } from "../utils/formatCurrency";
 import { useCurrency } from "../contexts/CurrencyContext";
 import api from "../api";
 import toast from "react-hot-toast";
-import { format } from "date-fns";
 
 const Dashboard = () => {
   const { displayCurrency, displayRate } = useCurrency();
@@ -60,7 +59,8 @@ const Dashboard = () => {
   const formatDate = (dateString) => {
     const dateObject = new Date(dateString);
     if (!isNaN(dateObject.getTime())) {
-      return format(dateObject, "MM/dd/yyyy");
+      // Follow the user's system locale instead of a hardcoded US format.
+      return dateObject.toLocaleDateString();
     }
     return "";
   };
@@ -90,12 +90,12 @@ const Dashboard = () => {
         <StatCard
           icon={faWallet}
           label="Balance"
-          value={formatMoney(balance, displayCurrency, displayRate)}
+          value={formatWhole(balance, displayCurrency, displayRate)}
         />
         <StatCard
           icon={faArrowTrendDown}
           label="Total Spent"
-          value={formatMoney(allTimeSpent, displayCurrency, displayRate)}
+          value={formatWhole(allTimeSpent, displayCurrency, displayRate)}
           tone="negative"
         />
         <StatCard
@@ -103,7 +103,7 @@ const Dashboard = () => {
           label="Latest Income"
           value={
             latestIncome
-              ? formatMoney(latestIncome.amount, displayCurrency, displayRate)
+              ? formatWhole(latestIncome.amount, displayCurrency, displayRate)
               : "—"
           }
           subtext={
@@ -118,7 +118,7 @@ const Dashboard = () => {
           label="Latest Expense"
           value={
             latestExpense
-              ? formatMoney(latestExpense.amount, displayCurrency, displayRate)
+              ? formatWhole(latestExpense.amount, displayCurrency, displayRate)
               : "—"
           }
           subtext={

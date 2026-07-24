@@ -69,6 +69,20 @@ class AuthTests(APITestCase):
         self.assertIn("password", response.data)
         self.assertFalse(User.objects.filter(username="weakling").exists())
 
+    def test_register_seeds_default_categories(self):
+        from .models import DEFAULT_CATEGORIES
+
+        self.client.post(
+            "/api/user/register/",
+            {"username": "freshuser", "password": "test-pass-123"},
+        )
+        user = User.objects.get(username="freshuser")
+        seeded = Category.objects.filter(user=user)
+        self.assertEqual(seeded.count(), len(DEFAULT_CATEGORIES))
+        self.assertEqual(
+            set(seeded.values_list("name", "type")), set(DEFAULT_CATEGORIES)
+        )
+
     def test_token_obtain(self):
         create_user("alice", "test-pass-123")
         response = self.client.post(
@@ -1295,12 +1309,16 @@ class CategoryTests(APITestCase):
         create_transaction(self.user, cat, "10.00")
         create_transaction(self.user, cat, "15.50")
         response = self.client.get("/api/categories/")
-        self.assertEqual(response.data[0]["transactions_sum"], "25.50")
+        # The user also has the seeded starter categories, so match by name
+        # instead of relying on list position.
+        row = next(r for r in response.data if r["name"] == "Food")
+        self.assertEqual(row["transactions_sum"], "25.50")
 
     def test_empty_category_sums_to_zero(self):
         Category.objects.create(user=self.user, name="Empty", type="expense")
         response = self.client.get("/api/categories/")
-        self.assertEqual(response.data[0]["transactions_sum"], "0.00")
+        row = next(r for r in response.data if r["name"] == "Empty")
+        self.assertEqual(row["transactions_sum"], "0.00")
 
     def test_transactions_sum_ignored_on_create(self):
         response = self.client.post(
@@ -1453,9 +1471,8 @@ class ReceiptScanTests(APITestCase):
         ),
     )
     def test_scan_success_matches_category(self, mock_llm, mock_ocr):
-        cat = Category.objects.create(
-            user=self.user, name="Groceries", type="expense"
-        )
+        # "Groceries" is one of the seeded starter categories.
+        cat = Category.objects.get(user=self.user, name="Groceries")
         response = self._post()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["name"], "Maxi")
@@ -1472,9 +1489,8 @@ class ReceiptScanTests(APITestCase):
         '"suggested_category": "groceries"}',
     )
     def test_scan_category_match_case_insensitive(self, mock_llm, mock_ocr):
-        cat = Category.objects.create(
-            user=self.user, name="Groceries", type="expense"
-        )
+        # Seeded "Groceries" matches the lowercase "groceries" suggestion.
+        cat = Category.objects.get(user=self.user, name="Groceries")
         response = self._post()
         self.assertEqual(response.data["category"], cat.id)
 
@@ -1964,6 +1980,64 @@ class VaultUnitTests(APITestCase):
         formatted = vault.format_recovery_key(key)
         messy = "  " + formatted.replace(" ", "\n") + "  "
         self.assertEqual(vault.parse_recovery_key(messy), key)
+
+
+class VaultIdleTimeoutTests(APITestCase):
+    """The in-memory DEK is dropped after VAULT_IDLE_TIMEOUT_SECONDS idle."""
+
+    UID = 999_001  # arbitrary id; the store is keyed by int, no real row needed
+
+    def setUp(self):
+        from . import vault
+
+        self.vault = vault
+        vault.lock_user(self.UID)  # clean slate in the shared module store
+
+    def tearDown(self):
+        self.vault.lock_user(self.UID)
+
+    @override_settings(VAULT_IDLE_TIMEOUT_SECONDS=100)
+    def test_dek_dropped_after_idle_timeout(self):
+        dek = self.vault.new_dek()
+        with patch.object(self.vault.time, "monotonic", return_value=1000.0):
+            self.vault.unlock_user(self.UID, dek)
+            self.assertTrue(self.vault.is_unlocked(self.UID))
+        # 101s later (> 100s window) the next access evicts the DEK.
+        with patch.object(self.vault.time, "monotonic", return_value=1101.0):
+            self.assertIsNone(self.vault.get_dek(self.UID))
+            self.assertFalse(self.vault.is_unlocked(self.UID))
+
+    @override_settings(VAULT_IDLE_TIMEOUT_SECONDS=100)
+    def test_activity_refreshes_idle_clock(self):
+        dek = self.vault.new_dek()
+        with patch.object(self.vault.time, "monotonic", return_value=0.0):
+            self.vault.unlock_user(self.UID, dek)
+        # Access at t=80 (inside the window) counts as activity, resetting it.
+        with patch.object(self.vault.time, "monotonic", return_value=80.0):
+            self.assertEqual(self.vault.get_dek(self.UID), dek)
+        # t=160 is 160s after unlock but only 80s after the last access -> alive.
+        with patch.object(self.vault.time, "monotonic", return_value=160.0):
+            self.assertEqual(self.vault.get_dek(self.UID), dek)
+
+    @override_settings(VAULT_IDLE_TIMEOUT_SECONDS=100)
+    def test_is_unlocked_does_not_count_as_activity(self):
+        dek = self.vault.new_dek()
+        with patch.object(self.vault.time, "monotonic", return_value=0.0):
+            self.vault.unlock_user(self.UID, dek)
+        # Polling the state near the deadline must NOT keep the DEK alive.
+        with patch.object(self.vault.time, "monotonic", return_value=90.0):
+            self.assertTrue(self.vault.is_unlocked(self.UID))
+        with patch.object(self.vault.time, "monotonic", return_value=101.0):
+            self.assertFalse(self.vault.is_unlocked(self.UID))
+
+    @override_settings(VAULT_IDLE_TIMEOUT_SECONDS=0)
+    def test_zero_timeout_disables_idle_relock(self):
+        dek = self.vault.new_dek()
+        with patch.object(self.vault.time, "monotonic", return_value=0.0):
+            self.vault.unlock_user(self.UID, dek)
+        with patch.object(self.vault.time, "monotonic", return_value=10_000_000.0):
+            self.assertEqual(self.vault.get_dek(self.UID), dek)
+            self.assertTrue(self.vault.is_unlocked(self.UID))
 
 
 class VaultModelTests(APITestCase):
