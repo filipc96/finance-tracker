@@ -1,80 +1,68 @@
 import { faTrash, faPen } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import DataTable from "./ui/DataTable";
 import { formatAmount } from "../utils/formatCurrency";
 
-const TransactionTable = ({ transactions, onDelete, onEdit }) => {
-  return (
-    <div className="relative overflow-x-auto shadow-md rounded-md border">
-      <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
-        <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-          <tr>
-            <th scope="col" className="px-6 py-3">
-              Name
-            </th>
-            <th scope="col" className="px-6 py-3">
-              Type
-            </th>
-            <th scope="col" className="px-6 py-3">
-              Amount
-            </th>
-            <th scope="col" className="px-6 py-3">
-              Date
-            </th>
-            <th scope="col" className="px-6 py-3">
-              Category
-            </th>
-            <th scope="col" className="px-6 py-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((transaction) => {
-            return (
-              <tr
-                className="odd:bg-white odd:dark:bg-gray-900 even:bg-gray-50 even:dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
-                key={transaction.id}
-              >
-                <td className="px-6 py-4"> {transaction.name}</td>
-                <td className="px-6 py-4"> {transaction.type}</td>
-                {transaction.type === "expense" ? (
-                  <td className="px-6 py-4 text text-red-500">
-                    {" "}
-                    -{formatAmount(transaction.amount)}
-                  </td>
-                ) : (
-                  <td className="px-6 py-4 text-green-500">
-                    {" "}
-                    +{formatAmount(transaction.amount)}
-                  </td>
-                )}
-                <td className="px-6 py-4">{transaction.date}</td>
-                <td className="px-6 py-4">{transaction.category_name}</td>
+// Server-sorted table: column `key`s match the backend `ordering` whitelist, and
+// History passes `sort`/`onSortChange` so header clicks refetch in the new order.
+const TransactionTable = ({ transactions, onDelete, onEdit, sort, onSortChange }) => {
+  const columns = [
+    { key: "name", header: "Name", sortable: true },
+    { key: "type", header: "Type", cellClassName: "capitalize" },
+    {
+      key: "amount",
+      header: "Amount",
+      align: "right",
+      sortable: true,
+      render: (t) =>
+        t.type === "expense" ? (
+          <span className="text-red-500">-{formatAmount(t.amount)}</span>
+        ) : (
+          <span className="text-green-500">+{formatAmount(t.amount)}</span>
+        ),
+    },
+    { key: "date", header: "Date", align: "right", sortable: true },
+    {
+      key: "category",
+      header: "Category",
+      sortable: true,
+      render: (t) => t.category_name,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (t) => (
+        <div className="flex items-center gap-1">
+          {onEdit && (
+            <button
+              onClick={() => onEdit(t)}
+              className="rounded p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 transition-colors"
+              aria-label="Edit transaction"
+            >
+              <FontAwesomeIcon icon={faPen} />
+            </button>
+          )}
+          <button
+            onClick={() => onDelete(t.id)}
+            className="rounded p-1.5 text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
+            aria-label="Delete transaction"
+          >
+            <FontAwesomeIcon icon={faTrash} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-1">
-                    {onEdit && (
-                      <button
-                        onClick={() => onEdit(transaction)}
-                        className="rounded p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 transition-colors"
-                        aria-label="Edit transaction"
-                      >
-                        <FontAwesomeIcon icon={faPen} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onDelete(transaction.id)}
-                      className="rounded p-1.5 text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
-                      aria-label="Delete transaction"
-                    >
-                      <FontAwesomeIcon icon={faTrash} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+  return (
+    <DataTable
+      columns={columns}
+      rows={transactions}
+      getRowKey={(t) => t.id}
+      emptyMessage="No transactions."
+      sort={sort}
+      onSortChange={onSortChange}
+    />
   );
 };
 

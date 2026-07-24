@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   faPause,
@@ -27,6 +27,8 @@ const RecurringManager = ({ onMaterialized }) => {
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all"); // all | active | paused
 
   const getItems = () => {
     api
@@ -101,6 +103,17 @@ const RecurringManager = ({ onMaterialized }) => {
       .catch(() => toast.error("Failed to skip recurring transaction."));
   };
 
+  // Client-side narrowing of the loaded list by name and active/paused status.
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter(
+      (item) =>
+        (status === "all" ||
+          (status === "active" ? item.active : !item.active)) &&
+        (!q || item.name.toLowerCase().includes(q))
+    );
+  }, [items, search, status]);
+
   const matchingCategories = categories.filter((c) => c.type === form.type);
   const inputClass =
     "px-3 py-2 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 dark:text-gray-100";
@@ -174,13 +187,38 @@ const RecurringManager = ({ onMaterialized }) => {
         </Button>
       </form>
 
+      {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={`${inputClass} w-48`}
+          />
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className={inputClass}
+          >
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+          </select>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
           No recurring transactions yet.
         </p>
+      ) : visibleItems.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No recurring transactions match.
+        </p>
       ) : (
         <div className="flex flex-col divide-y divide-gray-200 dark:divide-gray-700">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <div
               key={item.id}
               className={`flex items-center justify-between py-2 text-sm ${

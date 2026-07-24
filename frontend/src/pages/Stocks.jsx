@@ -1,9 +1,70 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../api";
 import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import DataTable from "../components/ui/DataTable";
 import { formatAmount } from "../utils/formatCurrency";
+
+const positionColumns = [
+  { key: "name", header: "Name", sortable: true, cellClassName: "font-medium" },
+  {
+    key: "ticker",
+    header: "Ticker",
+    sortable: true,
+    cellClassName: "text-gray-500 dark:text-gray-400",
+  },
+  {
+    key: "quantity",
+    header: "Qty",
+    align: "right",
+    sortable: true,
+    sortType: "number",
+  },
+  {
+    key: "average_price",
+    header: "Avg price",
+    align: "right",
+    sortable: true,
+    sortType: "number",
+    render: (p) => formatAmount(p.average_price),
+  },
+  {
+    key: "current_price",
+    header: "Current",
+    align: "right",
+    sortable: true,
+    sortType: "number",
+    render: (p) => formatAmount(p.current_price),
+  },
+  {
+    key: "value",
+    header: "Value",
+    align: "right",
+    sortable: true,
+    sortType: "number",
+    render: (p) => formatAmount(p.value),
+  },
+  {
+    key: "unrealized_pl",
+    header: "P/L",
+    align: "right",
+    sortable: true,
+    sortType: "number",
+    render: (p) => (
+      <span
+        className={
+          Number(p.unrealized_pl) >= 0
+            ? "text-green-600 dark:text-green-400"
+            : "text-red-600 dark:text-red-400"
+        }
+      >
+        {formatAmount(p.unrealized_pl)}
+      </span>
+    ),
+  },
+];
 
 const SummaryCard = ({ label, value, colored }) => {
   const number = Number(value);
@@ -26,6 +87,7 @@ const Stocks = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [loading, setLoading] = useState(true);
   const [needsCredentials, setNeedsCredentials] = useState(false);
+  const [search, setSearch] = useState("");
 
   const getPortfolio = (refresh = false) => {
     setLoading(true);
@@ -53,6 +115,17 @@ const Stocks = () => {
   useEffect(() => {
     getPortfolio();
   }, []);
+
+  // Filter positions by name or ticker; the table sorts what remains.
+  const visiblePositions = useMemo(() => {
+    const rows = portfolio?.positions || [];
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) || p.ticker.toLowerCase().includes(q)
+    );
+  }, [portfolio, search]);
 
   if (needsCredentials) {
     return (
@@ -115,53 +188,19 @@ const Stocks = () => {
                 No open positions.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                    <tr>
-                      <th className="py-3 pr-4">Name</th>
-                      <th className="py-3 pr-4">Ticker</th>
-                      <th className="py-3 pr-4 text-right">Qty</th>
-                      <th className="py-3 pr-4 text-right">Avg price</th>
-                      <th className="py-3 pr-4 text-right">Current</th>
-                      <th className="py-3 pr-4 text-right">Value</th>
-                      <th className="py-3 text-right">P/L</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolio.positions.map((p) => {
-                      const pl = Number(p.unrealized_pl);
-                      return (
-                        <tr
-                          key={p.ticker}
-                          className="border-b border-gray-100 dark:border-gray-800"
-                        >
-                          <td className="py-3 pr-4 font-medium">{p.name}</td>
-                          <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">
-                            {p.ticker}
-                          </td>
-                          <td className="py-3 pr-4 text-right">{p.quantity}</td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatAmount(p.average_price)}
-                          </td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatAmount(p.current_price)}
-                          </td>
-                          <td className="py-3 pr-4 text-right">{formatAmount(p.value)}</td>
-                          <td
-                            className={`py-3 text-right ${
-                              pl >= 0
-                                ? "text-green-600 dark:text-green-400"
-                                : "text-red-600 dark:text-red-400"
-                            }`}
-                          >
-                            {formatAmount(p.unrealized_pl)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="flex flex-col gap-3">
+                <Input
+                  placeholder="Search name or ticker…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-64"
+                />
+                <DataTable
+                  columns={positionColumns}
+                  rows={visiblePositions}
+                  getRowKey={(p) => p.ticker}
+                  emptyMessage="No positions match."
+                />
               </div>
             )}
           </>

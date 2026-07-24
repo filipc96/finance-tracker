@@ -320,6 +320,50 @@ class TransactionFilterTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["count"], 3)
 
+    def _ordered_names(self, resp):
+        return [r["name"] for r in resp.data["results"]]
+
+    def test_ordering_by_amount_ascending(self):
+        resp = self.client.get("/api/transactions/?ordering=amount")
+        self.assertEqual(
+            self._ordered_names(resp),
+            ["Groceries", "Restaurant dinner", "March salary"],
+        )
+
+    def test_ordering_by_amount_descending(self):
+        resp = self.client.get("/api/transactions/?ordering=-amount")
+        self.assertEqual(
+            self._ordered_names(resp),
+            ["March salary", "Restaurant dinner", "Groceries"],
+        )
+
+    def test_ordering_by_name(self):
+        resp = self.client.get("/api/transactions/?ordering=name")
+        self.assertEqual(
+            self._ordered_names(resp),
+            ["Groceries", "March salary", "Restaurant dinner"],
+        )
+
+    def test_ordering_by_category_name(self):
+        # category orders by the related Category.name: Food (x2) before Salary.
+        resp = self.client.get("/api/transactions/?ordering=category")
+        self.assertEqual(self._ordered_names(resp)[-1], "March salary")
+
+    def test_ordering_composes_with_filters(self):
+        resp = self.client.get("/api/transactions/?type=expense&ordering=amount")
+        self.assertEqual(
+            self._ordered_names(resp), ["Groceries", "Restaurant dinner"]
+        )
+
+    def test_invalid_ordering_falls_back_to_newest_first(self):
+        resp = self.client.get("/api/transactions/?ordering=bogus")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Default is -date: Groceries 03-05, March salary 03-01, dinner 02-20.
+        self.assertEqual(
+            self._ordered_names(resp),
+            ["Groceries", "March salary", "Restaurant dinner"],
+        )
+
 
 class AggregateIsolationTests(APITestCase):
     def setUp(self):

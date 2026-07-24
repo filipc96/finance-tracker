@@ -262,8 +262,10 @@ class TransactionListCreate(generics.ListCreateAPIView):
 
         Query params (all optional, combined with AND): search (name
         substring), type (income|expense), category (id), date_from / date_to
-        (YYYY-MM-DD, inclusive), min_amount / max_amount. Unparsable values are
-        ignored rather than erroring so a malformed filter never 500s.
+        (YYYY-MM-DD, inclusive), min_amount / max_amount, ordering (date |
+        amount | name | category, optional leading '-' for descending).
+        Unparsable values are ignored rather than erroring so a malformed
+        filter never 500s.
         """
         qs = Transaction.objects.filter(user=self.request.user)
         p = self.request.query_params
@@ -294,6 +296,21 @@ class TransactionListCreate(generics.ListCreateAPIView):
                     qs = qs.filter(**{lookup: Decimal(raw)})
                 except InvalidOperation:
                     pass
+
+        # Sorting: whitelist the column, honor a leading '-' for descending, and
+        # always append -id as a stable tiebreaker. Anything unrecognized falls
+        # back to newest-first (same forgiving contract as the filters above).
+        ordering_fields = {
+            "date": "date",
+            "amount": "amount",
+            "name": "name",
+            "category": "category__name",
+        }
+        raw = p.get("ordering", "").strip()
+        desc = raw.startswith("-")
+        field = ordering_fields.get(raw[1:] if desc else raw)
+        if field:
+            return qs.order_by(f"-{field}" if desc else field, "-id")
 
         return qs.order_by("-date", "-id")
 

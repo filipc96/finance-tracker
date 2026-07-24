@@ -29,16 +29,27 @@ const History = () => {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [sort, setSort] = useState({ key: "date", dir: "desc" });
 
   const PAGE_SIZE = 20;
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const getTransactions = (targetPage = page, activeFilters = filters) => {
+  const getTransactions = (
+    targetPage = page,
+    activeFilters = filters,
+    activeSort = sort
+  ) => {
     const params = new URLSearchParams({ page: targetPage });
     Object.entries(activeFilters).forEach(([key, value]) => {
       if (value) params.append(key, value);
     });
+    if (activeSort?.key) {
+      params.append(
+        "ordering",
+        `${activeSort.dir === "desc" ? "-" : ""}${activeSort.key}`
+      );
+    }
     api
       .get(`/api/transactions/?${params.toString()}`)
       .then((response) => {
@@ -65,6 +76,11 @@ const History = () => {
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
     getTransactions(1, EMPTY_FILTERS);
+  };
+
+  const changeSort = (nextSort) => {
+    setSort(nextSort);
+    getTransactions(1, filters, nextSort);
   };
 
   const deleteTransaction = (id) => {
@@ -266,6 +282,8 @@ const History = () => {
             transactions={transactions}
             onDelete={deleteTransaction}
             onEdit={setEditing}
+            sort={sort}
+            onSortChange={changeSort}
           />
           {count > PAGE_SIZE && (
             <div className="flex items-center justify-center space-x-4 py-4">
