@@ -14,7 +14,5 @@ cryptography==49.0.0
 rapidocr-onnxruntime==1.2.3
 Pillow==12.3.0
 numpy==2.5.1
-
-# WSGI server + static serving for the packaged desktop sidecar (desktop.py)
-waitress==3.0.2
+# Static file serving; its middleware is loaded in all modes (web + desktop).
 whitenoise==6.12.0

@@ -1,6 +1,6 @@
 # Extra deps only needed to build/run the desktop (Tauri sidecar) app.
 # The web app uses requirements.txt; install this on top for packaging.
+# (whitenoise lives in requirements.txt — its middleware loads in web mode too.)
 -r requirements.txt
-whitenoise
-waitress
-pyinstaller
+waitress==3.0.2
+pyinstaller==6.21.0
