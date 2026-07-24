@@ -39,6 +39,7 @@ from . import vault
 from django.conf import settings as django_settings
 from cryptography.fernet import InvalidToken
 from .services import (
+    advance_recurring,
     process_recurring,
     process_savings_interest,
     upsert_net_worth_snapshot,
@@ -854,12 +855,34 @@ class RecurringListCreate(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 
+class RecurringUpdate(generics.UpdateAPIView):
+    """Edit a recurring rule or toggle its ``active`` flag (pause/resume)."""
+
+    serializer_class = RecurringTransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return RecurringTransaction.objects.filter(user=self.request.user)
+
+
 class RecurringDelete(generics.DestroyAPIView):
     serializer_class = RecurringTransactionSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return RecurringTransaction.objects.filter(user=self.request.user)
+
+
+class RecurringSkip(APIView):
+    """Advance a recurring item past its next occurrence without materializing
+    it (a manual skip)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        item = get_object_or_404(RecurringTransaction, pk=pk, user=request.user)
+        next_due = advance_recurring(item)
+        return Response({"next_due": next_due})
 
 
 class SavingsListCreate(generics.ListCreateAPIView):

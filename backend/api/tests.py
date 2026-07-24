@@ -528,6 +528,60 @@ class RecurringTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_pause_via_update_stops_materialization(self):
+        item = self.make_recurring(date.today())
+        resp = self.client.patch(
+            f"/api/recurring/update/{item.id}", {"active": False}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 0)
+
+    def test_resume_via_update_restores_materialization(self):
+        item = self.make_recurring(date.today())
+        item.active = False
+        item.save()
+        resp = self.client.patch(
+            f"/api/recurring/update/{item.id}", {"active": True}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 1)
+
+    def test_update_edits_amount(self):
+        item = self.make_recurring(date.today())
+        resp = self.client.patch(
+            f"/api/recurring/update/{item.id}", {"amount": "250.00"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        item.refresh_from_db()
+        self.assertEqual(item.amount, Decimal("250.00"))
+
+    def test_update_cross_user_404(self):
+        item = self.make_recurring(date.today())
+        self.client.force_authenticate(create_user("mallory"))
+        resp = self.client.patch(
+            f"/api/recurring/update/{item.id}", {"amount": "1.00"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_skip_advances_next_due_without_creating(self):
+        item = self.make_recurring(date.today())
+        resp = self.client.post(f"/api/recurring/skip/{item.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        item.refresh_from_db()
+        self.assertEqual(item.next_due, date.today() + relativedelta(months=1))
+        # Nothing materialized, and now that it's future, process creates 0.
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 0)
+        response = self.client.post("/api/process/")
+        self.assertEqual(response.data["recurring_created"], 0)
+
+    def test_skip_cross_user_404(self):
+        item = self.make_recurring(date.today())
+        self.client.force_authenticate(create_user("mallory"))
+        resp = self.client.post(f"/api/recurring/skip/{item.id}")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
 
 class AnalyticsTests(APITestCase):
     def setUp(self):

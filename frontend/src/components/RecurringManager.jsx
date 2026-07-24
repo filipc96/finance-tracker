@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import {
+  faPause,
+  faPlay,
+  faForward,
+  faPen,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
 import Button from "./ui/Button";
+import EditRecurringModal from "./EditRecurringModal";
 import { formatAmount } from "../utils/formatCurrency";
 
 const emptyForm = {
@@ -17,6 +26,7 @@ const RecurringManager = ({ onMaterialized }) => {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const [editing, setEditing] = useState(null);
 
   const getItems = () => {
     api
@@ -69,6 +79,26 @@ const RecurringManager = ({ onMaterialized }) => {
         getItems();
       })
       .catch(() => toast.error("Failed to remove recurring transaction."));
+  };
+
+  const toggleActive = (item) => {
+    api
+      .patch(`/api/recurring/update/${item.id}`, { active: !item.active })
+      .then(() => {
+        toast.success(item.active ? "Paused." : "Resumed.");
+        getItems();
+      })
+      .catch(() => toast.error("Failed to update recurring transaction."));
+  };
+
+  const skipItem = (item) => {
+    api
+      .post(`/api/recurring/skip/${item.id}`)
+      .then(() => {
+        toast.success("Skipped next occurrence.");
+        getItems();
+      })
+      .catch(() => toast.error("Failed to skip recurring transaction."));
   };
 
   const matchingCategories = categories.filter((c) => c.type === form.type);
@@ -153,23 +183,68 @@ const RecurringManager = ({ onMaterialized }) => {
           {items.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between py-2 text-sm"
+              className={`flex items-center justify-between py-2 text-sm ${
+                item.active ? "" : "opacity-50"
+              }`}
             >
-              <span className="flex-1 font-medium">{item.name}</span>
+              <span className="flex-1 font-medium flex items-center gap-2">
+                {item.name}
+                {!item.active && (
+                  <span className="rounded-full bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-xs font-normal text-gray-500 dark:text-gray-400">
+                    Paused
+                  </span>
+                )}
+              </span>
               <span className="w-24">{formatAmount(item.amount)}</span>
               <span className="w-24 capitalize">{item.type}</span>
               <span className="w-28">{item.category_name}</span>
               <span className="w-24 capitalize">{item.frequency}</span>
               <span className="w-28">next: {item.next_due}</span>
-              <button
-                onClick={() => deleteItem(item.id)}
-                className="text-red-500 hover:text-red-600"
-              >
-                Delete
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => toggleActive(item)}
+                  className="rounded p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 transition-colors"
+                  aria-label={item.active ? "Pause" : "Resume"}
+                  title={item.active ? "Pause" : "Resume"}
+                >
+                  <FontAwesomeIcon icon={item.active ? faPause : faPlay} />
+                </button>
+                <button
+                  onClick={() => skipItem(item)}
+                  className="rounded p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 transition-colors"
+                  aria-label="Skip next occurrence"
+                  title="Skip next occurrence"
+                >
+                  <FontAwesomeIcon icon={faForward} />
+                </button>
+                <button
+                  onClick={() => setEditing(item)}
+                  className="rounded p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 transition-colors"
+                  aria-label="Edit"
+                  title="Edit"
+                >
+                  <FontAwesomeIcon icon={faPen} />
+                </button>
+                <button
+                  onClick={() => deleteItem(item.id)}
+                  className="rounded p-1.5 text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
+                  aria-label="Delete"
+                  title="Delete"
+                >
+                  <FontAwesomeIcon icon={faTrash} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {editing && (
+        <EditRecurringModal
+          item={editing}
+          onClose={() => setEditing(null)}
+          onUpdated={getItems}
+        />
       )}
     </div>
   );

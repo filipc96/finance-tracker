@@ -70,6 +70,16 @@ urlpatterns = [
     ),
     path("recurring/", views.RecurringListCreate.as_view(), name="recurring-list"),
     path(
+        "recurring/update/<int:pk>",
+        views.RecurringUpdate.as_view(),
+        name="recurring-update",
+    ),
+    path(
+        "recurring/skip/<int:pk>",
+        views.RecurringSkip.as_view(),
+        name="recurring-skip",
+    ),
+    path(
         "recurring/delete/<int:pk>",
         views.RecurringDelete.as_view(),
         name="recurring-delete",

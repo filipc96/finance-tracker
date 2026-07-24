@@ -63,6 +63,14 @@ def process_recurring(user):
     return created
 
 
+def advance_recurring(item):
+    """Skip a recurring item's next occurrence: advance next_due by one period
+    without creating a Transaction. Returns the new next_due."""
+    item.next_due = item.next_due + FREQUENCY_DELTAS[item.frequency]
+    item.save(update_fields=["next_due", "date_modified"])
+    return item.next_due
+
+
 def upsert_net_worth_snapshot(user):
     """Record today's net worth from current balances and the cached
     portfolio value (never calls Trading 212 — rate limits)."""
