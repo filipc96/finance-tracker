@@ -5,6 +5,8 @@ from django.contrib.auth.models import User
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete
 
+from .fields import EncryptedCharField
+
 
 class Account(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -39,16 +41,16 @@ class Settings(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     dark_mode = models.BooleanField(default=False)
-    open_ai_api_key = models.CharField(max_length=255, blank=True, null=True)
-    anthropic_api_key = models.CharField(max_length=255, blank=True, null=True)
+    open_ai_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
+    anthropic_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
     ollama_base_url = models.CharField(max_length=255, blank=True)
     lmstudio_base_url = models.CharField(max_length=255, blank=True)
     llm_provider = models.CharField(
         max_length=16, choices=LLM_PROVIDER_CHOICES, default="openai"
     )
     llm_model = models.CharField(max_length=100, blank=True)
-    t212_api_key = models.CharField(max_length=255, blank=True, null=True)
-    t212_api_secret = models.CharField(max_length=255, blank=True, null=True)
+    t212_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
+    t212_api_secret = EncryptedCharField(max_length=500, blank=True, null=True)
     t212_environment = models.CharField(
         max_length=4, choices=T212_ENVIRONMENT_CHOICES, default="live"
     )
@@ -64,6 +66,31 @@ class Settings(models.Model):
 def create_user_settings(sender, instance, created, **kwargs):
     if created:
         Settings.objects.create(user=instance)
+
+
+class Vault(models.Model):
+    """Per-account key material for the master-password envelope encryption.
+
+    Holds the account's Data Encryption Key (DEK) wrapped two ways: by a
+    password-derived key (KEK, via scrypt over `kdf_salt`) and by a one-time
+    recovery key. The DEK plaintext is never stored — it is unwrapped into
+    process memory at login (see api/vault.py). There is deliberately **no**
+    auto-create signal: a vault can only be built when a password is available,
+    so it is created explicitly at registration / first login.
+    """
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="vault"
+    )
+    kdf_salt = models.BinaryField()
+    wrapped_dek = models.TextField()
+    recovery_wrapped_dek = models.TextField()
+
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s vault"
 
 
 class Category(models.Model):

@@ -58,6 +58,7 @@ binaries = []
 for pkg in (
     "openai",
     "anthropic",
+    "cryptography",  # native cffi/Rust bindings for at-rest key encryption
     "rapidocr_onnxruntime",
     "onnxruntime",
     "cv2",

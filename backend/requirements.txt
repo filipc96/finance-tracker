@@ -12,6 +12,7 @@ openai
 python-dateutil
 requests
 anthropic
+cryptography
 rapidocr-onnxruntime
 Pillow
 numpy

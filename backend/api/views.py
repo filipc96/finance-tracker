@@ -31,7 +31,11 @@ from .models import (
     SavingsAccount,
     SavingsTransaction,
     Transaction,
+    Vault,
 )
+from . import vault
+from django.conf import settings as django_settings
+from cryptography.fernet import InvalidToken
 from .services import (
     process_recurring,
     process_savings_interest,
@@ -129,9 +133,93 @@ class ChangePasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        request.user.set_password(new_password)
-        request.user.save()
+        # Re-wrap the vault DEK under the new password and change the Django
+        # auth password atomically — both must move together or the account
+        # would be locked out of its own secrets.
+        with db_transaction.atomic():
+            try:
+                vault.rewrap_password(request.user, old_password, new_password)
+            except Vault.DoesNotExist:
+                # Pre-vault account (no secrets migrated yet): nothing to rewrap.
+                pass
+            request.user.set_password(new_password)
+            request.user.save()
         return Response({"detail": "Password changed successfully."})
+
+
+class AccountListView(APIView):
+    """Usernames on this machine, for the desktop logged-out account picker.
+
+    Desktop-only: on the web build we return 404 so a public deployment never
+    leaks its user list. The data folder is single-user-trust already (whoever
+    can read it can see the DB), so listing usernames adds no exposure there.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        if not django_settings.DESKTOP_MODE:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        usernames = list(
+            User.objects.order_by("username").values_list("username", flat=True)
+        )
+        return Response([{"username": u} for u in usernames])
+
+
+class VaultStateView(APIView):
+    """Whether the current user's vault is unlocked in this sidecar.
+
+    The JWT can still be valid after an app restart (fresh sidecar → DEK gone),
+    so the frontend uses this to detect a locked session and re-prompt for the
+    password instead of letting the user in with unreadable secrets.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"unlocked": vault.is_unlocked(request.user.id)})
+
+
+class VaultRecoverView(APIView):
+    """Reset a forgotten password using the one-time recovery key.
+
+    Unwraps the DEK with the recovery key, re-wraps it under a new password, and
+    sets the new Django auth password — no data loss. Deliberately AllowAny (the
+    user is locked out), but it requires the recovery key, which only unwraps the
+    correct account's DEK.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get("username", "")
+        recovery_key = request.data.get("recovery_key", "")
+        new_password = request.data.get("new_password", "")
+
+        user = User.objects.filter(username=username).first()
+        if user is None:
+            return Response(
+                {"error": "Invalid account or recovery key."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as e:
+            return Response(
+                {"error": " ".join(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            with db_transaction.atomic():
+                vault.recover(user, recovery_key, new_password)
+                user.set_password(new_password)
+                user.save()
+        except (Vault.DoesNotExist, InvalidToken):
+            return Response(
+                {"error": "Invalid account or recovery key."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"detail": "Password reset. You can now log in."})
 
 
 class SettingsListCreate(APIView):

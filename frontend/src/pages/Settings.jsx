@@ -23,18 +23,29 @@ const Settings = () => {
   const [t212Environment, setT212Environment] = useState("live");
   const [username, setUsername] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  // Whether a secret is already stored server-side. The raw keys are never
+  // sent back to the browser, so the inputs stay empty and these flags drive
+  // the "already saved — leave blank to keep" affordance.
+  const [hasKeys, setHasKeys] = useState({
+    open_ai: false,
+    anthropic: false,
+    t212_key: false,
+    t212_secret: false,
+  });
 
   useEffect(() => {
     api.get("/api/settings/").then((response) => {
-      setApiKey(response.data.open_ai_api_key || "");
-      setAnthropicKey(response.data.anthropic_api_key || "");
       setLlmProvider(response.data.llm_provider || "openai");
       setLlmModel(response.data.llm_model || "");
       setOllamaUrl(response.data.ollama_base_url || "");
       setLmstudioUrl(response.data.lmstudio_base_url || "");
-      setT212Key(response.data.t212_api_key || "");
-      setT212Secret(response.data.t212_api_secret || "");
       setT212Environment(response.data.t212_environment || "live");
+      setHasKeys({
+        open_ai: !!response.data.has_open_ai_api_key,
+        anthropic: !!response.data.has_anthropic_api_key,
+        t212_key: !!response.data.has_t212_api_key,
+        t212_secret: !!response.data.has_t212_api_secret,
+      });
     });
     api
       .get("/api/user/")
@@ -45,18 +56,33 @@ const Settings = () => {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      await api.post("/api/settings/", {
+      const payload = {
         dark_mode: darkMode,
-        open_ai_api_key: apiKey,
-        anthropic_api_key: anthropicKey,
         llm_provider: llmProvider,
         llm_model: llmModel,
         ollama_base_url: ollamaUrl,
         lmstudio_base_url: lmstudioUrl,
-        t212_api_key: t212Key,
-        t212_api_secret: t212Secret,
         t212_environment: t212Environment,
+      };
+      // Only send a secret when the user actually typed one — a blank field
+      // means "keep the stored key".
+      if (apiKey) payload.open_ai_api_key = apiKey;
+      if (anthropicKey) payload.anthropic_api_key = anthropicKey;
+      if (t212Key) payload.t212_api_key = t212Key;
+      if (t212Secret) payload.t212_api_secret = t212Secret;
+
+      const { data } = await api.post("/api/settings/", payload);
+      // Reflect newly-stored keys and clear the inputs so they show as saved.
+      setHasKeys({
+        open_ai: !!data.has_open_ai_api_key,
+        anthropic: !!data.has_anthropic_api_key,
+        t212_key: !!data.has_t212_api_key,
+        t212_secret: !!data.has_t212_api_secret,
       });
+      setApiKey("");
+      setAnthropicKey("");
+      setT212Key("");
+      setT212Secret("");
       toast.success("Settings saved.");
     } catch (error) {
       toast.error("Failed to save settings.");
@@ -64,6 +90,9 @@ const Settings = () => {
       setIsSaving(false);
     }
   };
+
+  const savedPlaceholder = (fallback, isSet) =>
+    isSet ? "Saved — leave blank to keep" : fallback;
 
   const modelPlaceholder =
     llmProvider === "openai"
@@ -138,7 +167,10 @@ const Settings = () => {
               label="OpenAI API Key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your OpenAI API key"
+              placeholder={savedPlaceholder(
+                "Enter your OpenAI API key",
+                hasKeys.open_ai
+              )}
             />
           )}
           {llmProvider === "anthropic" && (
@@ -146,7 +178,10 @@ const Settings = () => {
               label="Anthropic API Key"
               value={anthropicKey}
               onChange={(e) => setAnthropicKey(e.target.value)}
-              placeholder="Enter your Anthropic API key"
+              placeholder={savedPlaceholder(
+                "Enter your Anthropic API key",
+                hasKeys.anthropic
+              )}
             />
           )}
           {llmProvider === "ollama" && (
@@ -179,13 +214,19 @@ const Settings = () => {
             label="API Key"
             value={t212Key}
             onChange={(e) => setT212Key(e.target.value)}
-            placeholder="Enter your Trading 212 API key"
+            placeholder={savedPlaceholder(
+              "Enter your Trading 212 API key",
+              hasKeys.t212_key
+            )}
           />
           <PasswordInput
             label="API Secret"
             value={t212Secret}
             onChange={(e) => setT212Secret(e.target.value)}
-            placeholder="Enter your Trading 212 API secret"
+            placeholder={savedPlaceholder(
+              "Enter your Trading 212 API secret",
+              hasKeys.t212_secret
+            )}
           />
           <Select
             label="Environment"

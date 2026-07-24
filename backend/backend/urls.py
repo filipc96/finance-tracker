@@ -2,8 +2,16 @@ from django.conf import settings
 from django.contrib import admin
 from django.http import HttpResponse, JsonResponse
 from django.urls import path, re_path, include
-from api.views import ChangePasswordView, CreateUserView, GetUser
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from api.views import (
+    AccountListView,
+    ChangePasswordView,
+    CreateUserView,
+    GetUser,
+    VaultRecoverView,
+    VaultStateView,
+)
+from api.tokens import VaultTokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 
 def health_view(request):
@@ -27,8 +35,11 @@ urlpatterns = [
         ChangePasswordView.as_view(),
         name="change-password",
     ),
-    path("api/token/", TokenObtainPairView.as_view(), name="get-token"),
+    path("api/token/", VaultTokenObtainPairView.as_view(), name="get-token"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="refresh"),
+    path("api/accounts/", AccountListView.as_view(), name="accounts"),
+    path("api/vault/state/", VaultStateView.as_view(), name="vault-state"),
+    path("api/vault/recover/", VaultRecoverView.as_view(), name="vault-recover"),
     path("api-auth/", include("rest_framework.urls")),
     path("api/", include("api.urls")),
 ]

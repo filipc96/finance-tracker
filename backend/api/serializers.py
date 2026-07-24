@@ -1,5 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
+
+from . import vault
 from .models import (
     Budget,
     Category,
@@ -12,15 +14,42 @@ from .models import (
 
 
 class UserSerializer(serializers.ModelSerializer):
+    # Returned exactly once, in the registration response, so the client can
+    # show the recovery key. Never stored, never echoed again.
+    recovery_key = serializers.CharField(read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "password"]
+        fields = ["id", "username", "password", "recovery_key"]
         extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
+        from django.conf import settings as django_settings
+
+        password = validated_data["password"]
         user = User.objects.create_user(**validated_data)
+        user.recovery_key = None
+        # Desktop only: build the account's vault from the registration password
+        # so its secrets are protected by that password from the first login.
+        # In web/dev mode there is no vault (keyfile encryption, as before).
+        if getattr(django_settings, "DESKTOP_MODE", False):
+            user.recovery_key = vault.create_vault(user, password)
         return user
 class SettingsSerializer(serializers.ModelSerializer):
+    # Secrets are write-only — never echoed back to the client. The client
+    # instead reads the has_* booleans below to know whether a key is set.
+    SECRET_FIELDS = (
+        "open_ai_api_key",
+        "anthropic_api_key",
+        "t212_api_key",
+        "t212_api_secret",
+    )
+
+    has_open_ai_api_key = serializers.SerializerMethodField()
+    has_anthropic_api_key = serializers.SerializerMethodField()
+    has_t212_api_key = serializers.SerializerMethodField()
+    has_t212_api_secret = serializers.SerializerMethodField()
+
     class Meta:
         model = Settings
         fields = [
@@ -34,8 +63,39 @@ class SettingsSerializer(serializers.ModelSerializer):
             "t212_api_key",
             "t212_api_secret",
             "t212_environment",
+            "has_open_ai_api_key",
+            "has_anthropic_api_key",
+            "has_t212_api_key",
+            "has_t212_api_secret",
         ]
-        extra_kwargs = {"user": {"read_only": True}}
+        extra_kwargs = {
+            "user": {"read_only": True},
+            "open_ai_api_key": {"write_only": True},
+            "anthropic_api_key": {"write_only": True},
+            "t212_api_key": {"write_only": True},
+            "t212_api_secret": {"write_only": True},
+        }
+
+    def get_has_open_ai_api_key(self, obj):
+        return bool(obj.open_ai_api_key)
+
+    def get_has_anthropic_api_key(self, obj):
+        return bool(obj.anthropic_api_key)
+
+    def get_has_t212_api_key(self, obj):
+        return bool(obj.t212_api_key)
+
+    def get_has_t212_api_secret(self, obj):
+        return bool(obj.t212_api_secret)
+
+    def update(self, instance, validated_data):
+        # A blank secret means "leave the stored value unchanged" — this is
+        # what lets the client omit keys the user didn't retype without wiping
+        # them. An explicit non-empty value overwrites.
+        for field in self.SECRET_FIELDS:
+            if field in validated_data and validated_data[field] in (None, ""):
+                validated_data.pop(field)
+        return super().update(instance, validated_data)
 
 class CategorySerializer(serializers.ModelSerializer):
     transactions_sum = serializers.DecimalField(

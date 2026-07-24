@@ -3,6 +3,7 @@ import { jwtDecode } from "jwt-decode";
 import api from "../api";
 import { REFRESH_TOKEN, ACCESS_TOKEN } from "../constants";
 import { useState, useEffect } from "react";
+import { isDesktop } from "../utils/desktop";
 
 const ProtectedRoute = ({ children }) => {
   const [isAuthorized, setIsAuthorized] = useState(null);
@@ -10,6 +11,23 @@ const ProtectedRoute = ({ children }) => {
   useEffect(() => {
     auth().catch(() => setIsAuthorized(false));
   }, []);
+
+  // On desktop the JWT can outlive the sidecar (a fresh sidecar spawns each
+  // launch), leaving a valid token but a locked vault. Gate on vault state so a
+  // relaunch re-prompts for the password instead of entering half-locked with
+  // unreadable secrets. The web build has no per-launch lock, so it's a no-op.
+  const finishAuthorized = async () => {
+    if (!isDesktop()) {
+      setIsAuthorized(true);
+      return;
+    }
+    try {
+      const res = await api.get("/api/vault/state/");
+      setIsAuthorized(res.data.unlocked === true);
+    } catch {
+      setIsAuthorized(false);
+    }
+  };
 
   const refreshToken = async () => {
     const refreshToken = localStorage.getItem(REFRESH_TOKEN);
@@ -19,7 +37,7 @@ const ProtectedRoute = ({ children }) => {
       });
       if (res.status === 200) {
         localStorage.setItem(ACCESS_TOKEN, res.data.access);
-        setIsAuthorized(true);
+        await finishAuthorized();
       } else {
         setIsAuthorized(false);
       }
@@ -42,7 +60,7 @@ const ProtectedRoute = ({ children }) => {
     if (tokenExpiration < now) {
       await refreshToken();
     } else {
-      setIsAuthorized(true);
+      await finishAuthorized();
     }
   };
 

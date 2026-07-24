@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -971,8 +972,12 @@ class ChatProvidersTests(APITestCase):
         post = self.client.post("/api/settings/", payload)
         self.assertEqual(post.status_code, status.HTTP_200_OK)
         get = self.client.get("/api/settings/")
-        for key, value in payload.items():
-            self.assertEqual(get.data[key], value)
+        # Non-secret fields round-trip unchanged.
+        for key in ("llm_provider", "llm_model", "ollama_base_url", "lmstudio_base_url"):
+            self.assertEqual(get.data[key], payload[key])
+        # The secret is never echoed back — only a has_* flag is exposed.
+        self.assertNotIn("anthropic_api_key", get.data)
+        self.assertTrue(get.data["has_anthropic_api_key"])
 
 
 class ChangePasswordTests(APITestCase):
@@ -1288,3 +1293,491 @@ class ReceiptUnitTests(APITestCase):
 
         with self.assertRaises(ReceiptError):
             parse_receipt("ocr", {}, [])
+
+
+class EncryptedKeyTests(APITestCase):
+    """The four Settings secrets are encrypted at rest and never echoed back."""
+
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+
+    def _raw_column(self, column):
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT {column} FROM api_settings WHERE user_id = %s",
+                [self.user.id],
+            )
+            return cursor.fetchone()[0]
+
+    def test_crypto_round_trip(self):
+        from . import crypto
+
+        token = crypto.encrypt("sk-secret")
+        self.assertNotEqual(token, "sk-secret")
+        self.assertTrue(crypto.is_encrypted(token))
+        self.assertEqual(crypto.decrypt(token), "sk-secret")
+
+    def test_crypto_passthrough_for_empty(self):
+        from . import crypto
+
+        self.assertIsNone(crypto.encrypt(None))
+        self.assertEqual(crypto.encrypt(""), "")
+        self.assertIsNone(crypto.decrypt(None))
+        self.assertFalse(crypto.is_encrypted(""))
+
+    def test_crypto_decrypt_legacy_plaintext_passthrough(self):
+        from . import crypto
+
+        # A pre-migration plaintext value is returned unchanged, not an error.
+        self.assertEqual(crypto.decrypt("sk-legacy-plaintext"), "sk-legacy-plaintext")
+
+    def test_field_round_trip_through_orm(self):
+        # Proves llm.resolve_llm / StocksPortfolio still read usable plaintext.
+        self.user.settings.open_ai_api_key = "sk-abc123"
+        self.user.settings.save()
+        reloaded = Settings.objects.get(user=self.user)
+        self.assertEqual(reloaded.open_ai_api_key, "sk-abc123")
+
+    def test_api_key_encrypted_at_rest(self):
+        self.user.settings.open_ai_api_key = "sk-plainsecret"
+        self.user.settings.save()
+        raw = self._raw_column("open_ai_api_key")
+        self.assertNotEqual(raw, "sk-plainsecret")
+        self.assertTrue(raw.startswith("gAAAAA"))  # Fernet token marker
+
+    def test_settings_get_masks_secrets(self):
+        self.client.post(
+            "/api/settings/",
+            {"open_ai_api_key": "sk-x", "t212_api_key": "t-key"},
+        )
+        get = self.client.get("/api/settings/")
+        self.assertNotIn("open_ai_api_key", get.data)
+        self.assertNotIn("t212_api_key", get.data)
+        self.assertTrue(get.data["has_open_ai_api_key"])
+        self.assertTrue(get.data["has_t212_api_key"])
+        self.assertFalse(get.data["has_anthropic_api_key"])
+
+    def test_blank_key_preserves_existing(self):
+        self.client.post("/api/settings/", {"open_ai_api_key": "sk-keepme"})
+        # Save other settings without retyping the key.
+        self.client.post(
+            "/api/settings/",
+            {"open_ai_api_key": "", "llm_model": "gpt-4o"},
+        )
+        reloaded = Settings.objects.get(user=self.user)
+        self.assertEqual(reloaded.open_ai_api_key, "sk-keepme")
+        self.assertEqual(reloaded.llm_model, "gpt-4o")
+
+    def test_omitted_key_preserves_existing(self):
+        self.client.post("/api/settings/", {"open_ai_api_key": "sk-keepme"})
+        self.client.post("/api/settings/", {"llm_model": "gpt-4o"})
+        reloaded = Settings.objects.get(user=self.user)
+        self.assertEqual(reloaded.open_ai_api_key, "sk-keepme")
+
+    def test_new_key_overwrites(self):
+        self.client.post("/api/settings/", {"open_ai_api_key": "sk-old"})
+        self.client.post("/api/settings/", {"open_ai_api_key": "sk-new"})
+        reloaded = Settings.objects.get(user=self.user)
+        self.assertEqual(reloaded.open_ai_api_key, "sk-new")
+
+
+class VaultUnitTests(APITestCase):
+    """Envelope-crypto primitives in api/vault.py."""
+
+    def tearDown(self):
+        from . import vault
+
+        vault.clear_current_dek()
+
+    def test_kek_derivation_stable_per_salt(self):
+        from . import vault
+
+        salt = vault.new_salt()
+        self.assertEqual(
+            vault.derive_kek("hunter2", salt), vault.derive_kek("hunter2", salt)
+        )
+
+    def test_kek_differs_by_salt_and_password(self):
+        from . import vault
+
+        salt_a, salt_b = vault.new_salt(), vault.new_salt()
+        self.assertNotEqual(
+            vault.derive_kek("hunter2", salt_a),
+            vault.derive_kek("hunter2", salt_b),
+        )
+        self.assertNotEqual(
+            vault.derive_kek("hunter2", salt_a),
+            vault.derive_kek("other", salt_a),
+        )
+
+    def test_wrap_unwrap_round_trip(self):
+        from . import vault
+
+        dek = vault.new_dek()
+        salt = vault.new_salt()
+        kek = vault.derive_kek("pw", salt)
+        token = vault.wrap(dek, kek)
+        self.assertNotIn(dek.decode(), token)
+        self.assertEqual(vault.unwrap(token, kek), dek)
+
+    def test_unwrap_wrong_key_raises(self):
+        from cryptography.fernet import InvalidToken
+
+        from . import vault
+
+        dek = vault.new_dek()
+        salt = vault.new_salt()
+        token = vault.wrap(dek, vault.derive_kek("right", salt))
+        with self.assertRaises(InvalidToken):
+            vault.unwrap(token, vault.derive_kek("wrong", salt))
+
+    def test_recovery_key_format_round_trip(self):
+        from . import vault
+
+        key = vault.new_recovery_key()
+        formatted = vault.format_recovery_key(key)
+        self.assertIn(" ", formatted)
+        self.assertEqual(vault.parse_recovery_key(formatted), key)
+
+    def test_recovery_key_parse_tolerates_whitespace(self):
+        from . import vault
+
+        key = vault.new_recovery_key()
+        formatted = vault.format_recovery_key(key)
+        messy = "  " + formatted.replace(" ", "\n") + "  "
+        self.assertEqual(vault.parse_recovery_key(messy), key)
+
+
+class VaultModelTests(APITestCase):
+    """create/unlock/rewrap/recover over a real Vault row."""
+
+    def setUp(self):
+        self.user = create_user("alice")
+
+    def tearDown(self):
+        from . import vault
+
+        vault.clear_current_dek()
+        vault.lock_user(self.user.id)
+
+    def test_create_returns_recovery_and_unlocks(self):
+        from . import vault
+
+        recovery = vault.create_vault(self.user, "pw-abc-123")
+        self.assertTrue(recovery)
+        self.assertTrue(vault.is_unlocked(self.user.id))
+        self.assertIsNotNone(vault.get_dek(self.user.id))
+
+    def test_unlock_with_password(self):
+        from . import vault
+
+        vault.create_vault(self.user, "pw-abc-123")
+        dek = vault.get_dek(self.user.id)
+        vault.lock_user(self.user.id)
+        self.assertFalse(vault.is_unlocked(self.user.id))
+        vault.unlock_with_password(self.user, "pw-abc-123")
+        self.assertEqual(vault.get_dek(self.user.id), dek)
+
+    def test_unlock_wrong_password_raises(self):
+        from cryptography.fernet import InvalidToken
+
+        from . import vault
+
+        vault.create_vault(self.user, "pw-abc-123")
+        vault.lock_user(self.user.id)
+        with self.assertRaises(InvalidToken):
+            vault.unlock_with_password(self.user, "wrong-pw")
+
+    def test_rewrap_password_keeps_same_dek(self):
+        from . import vault
+
+        vault.create_vault(self.user, "old-pw-123")
+        dek = vault.get_dek(self.user.id)
+        vault.rewrap_password(self.user, "old-pw-123", "new-pw-456")
+        vault.lock_user(self.user.id)
+        vault.unlock_with_password(self.user, "new-pw-456")
+        self.assertEqual(vault.get_dek(self.user.id), dek)
+
+    def test_old_password_fails_after_rewrap(self):
+        from cryptography.fernet import InvalidToken
+
+        from . import vault
+
+        vault.create_vault(self.user, "old-pw-123")
+        vault.rewrap_password(self.user, "old-pw-123", "new-pw-456")
+        vault.lock_user(self.user.id)
+        with self.assertRaises(InvalidToken):
+            vault.unlock_with_password(self.user, "old-pw-123")
+
+    def test_recover_with_recovery_key_keeps_dek(self):
+        from . import vault
+
+        recovery = vault.create_vault(self.user, "old-pw-123")
+        dek = vault.get_dek(self.user.id)
+        vault.recover(self.user, recovery, "reset-pw-789")
+        vault.lock_user(self.user.id)
+        vault.unlock_with_password(self.user, "reset-pw-789")
+        self.assertEqual(vault.get_dek(self.user.id), dek)
+
+    def test_recovery_key_survives_password_change(self):
+        from . import vault
+
+        recovery = vault.create_vault(self.user, "old-pw-123")
+        dek = vault.get_dek(self.user.id)
+        # Password change re-wraps only the password copy, not the recovery copy.
+        vault.rewrap_password(self.user, "old-pw-123", "new-pw-456")
+        vault.recover(self.user, recovery, "reset-pw-789")
+        self.assertEqual(vault.get_dek(self.user.id), dek)
+
+
+class VaultFieldTests(APITestCase):
+    """With a DEK active, secrets encrypt under the DEK, not the keyfile."""
+
+    def setUp(self):
+        self.user = create_user("alice")
+
+    def tearDown(self):
+        from . import vault
+
+        vault.clear_current_dek()
+        vault.lock_user(self.user.id)
+
+    def _raw_column(self, column):
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT {column} FROM api_settings WHERE user_id = %s",
+                [self.user.id],
+            )
+            return cursor.fetchone()[0]
+
+    def test_secret_encrypted_under_dek_not_keyfile(self):
+        from cryptography.fernet import Fernet, InvalidToken
+
+        from . import crypto, vault
+
+        vault.create_vault(self.user, "pw-abc-123")
+        dek = vault.get_dek(self.user.id)
+        vault.set_current_dek(dek)
+        try:
+            self.user.settings.open_ai_api_key = "sk-under-dek"
+            self.user.settings.save()
+        finally:
+            vault.clear_current_dek()
+
+        raw = self._raw_column("open_ai_api_key")
+        self.assertTrue(raw.startswith("gAAAAA"))
+        # The keyfile can no longer read it — only the DEK can.
+        with self.assertRaises(InvalidToken):
+            crypto.keyfile_fernet().decrypt(raw.encode())
+        self.assertEqual(
+            Fernet(dek).decrypt(raw.encode()).decode(), "sk-under-dek"
+        )
+
+
+class VaultLazyMigrationTests(APITestCase):
+    """First login re-encrypts a keyfile secret to the DEK, no data loss."""
+
+    def setUp(self):
+        self.user = create_user("alice")
+
+    def tearDown(self):
+        from . import vault
+
+        vault.clear_current_dek()
+        vault.lock_user(self.user.id)
+
+    def _raw_column(self, column):
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT {column} FROM api_settings WHERE user_id = %s",
+                [self.user.id],
+            )
+            return cursor.fetchone()[0]
+
+    def test_first_login_migrates_keyfile_secret_to_dek(self):
+        from cryptography.fernet import Fernet, InvalidToken
+
+        from . import crypto, vault
+
+        # Seed a keyfile-encrypted secret (no DEK active — today's behaviour).
+        self.user.settings.open_ai_api_key = "sk-legacy"
+        self.user.settings.save()
+        raw_before = self._raw_column("open_ai_api_key")
+        self.assertEqual(crypto.keyfile_fernet().decrypt(raw_before.encode()).decode(), "sk-legacy")
+
+        # First login under the vault code: creates the vault and migrates.
+        recovery = vault.ensure_unlocked(self.user, "test-pass-123")
+        self.assertTrue(recovery)  # freshly created -> recovery key returned
+
+        raw_after = self._raw_column("open_ai_api_key")
+        dek = vault.get_dek(self.user.id)
+        with self.assertRaises(InvalidToken):
+            crypto.keyfile_fernet().decrypt(raw_after.encode())
+        self.assertEqual(Fernet(dek).decrypt(raw_after.encode()).decode(), "sk-legacy")
+
+
+@override_settings(DESKTOP_MODE=True)
+class VaultApiTests(APITestCase):
+    """Registration, login-unlock, vault state, recover, and change-password.
+
+    The vault is a desktop feature, so these run with DESKTOP_MODE forced on.
+    """
+
+    def tearDown(self):
+        from . import vault
+
+        vault.clear_current_dek()
+
+    def _login(self, username, password):
+        resp = self.client.post(
+            "/api/token/", {"username": username, "password": password}
+        )
+        return resp
+
+    def _auth(self, access):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def test_register_returns_recovery_key(self):
+        resp = self.client.post(
+            "/api/user/register/", {"username": "bob", "password": "pw-abc-123"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIn("recovery_key", resp.data)
+        self.assertTrue(resp.data["recovery_key"])
+
+    def test_login_unlocks_registered_account_without_recovery_key(self):
+        from . import vault
+
+        self.client.post(
+            "/api/user/register/", {"username": "bob", "password": "pw-abc-123"}
+        )
+        user = User.objects.get(username="bob")
+        vault.lock_user(user.id)  # simulate a fresh sidecar
+
+        resp = self._login("bob", "pw-abc-123")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Vault already existed (made at registration) -> no recovery key echoed.
+        self.assertNotIn("recovery_key", resp.data)
+        self.assertTrue(vault.is_unlocked(user.id))
+
+    def test_vault_state_reflects_unlock(self):
+        from . import vault
+
+        self.client.post(
+            "/api/user/register/", {"username": "bob", "password": "pw-abc-123"}
+        )
+        user = User.objects.get(username="bob")
+        resp = self._login("bob", "pw-abc-123")
+        self._auth(resp.data["access"])
+
+        state = self.client.get("/api/vault/state/")
+        self.assertTrue(state.data["unlocked"])
+
+        vault.lock_user(user.id)
+        state = self.client.get("/api/vault/state/")
+        self.assertFalse(state.data["unlocked"])
+
+    @override_settings(DESKTOP_MODE=False)
+    def test_accounts_list_404_in_web_mode(self):
+        create_user("bob")
+        resp = self.client.get("/api/accounts/")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_accounts_list_desktop_mode(self):
+        create_user("carol")
+        create_user("dave")
+        resp = self.client.get("/api/accounts/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        usernames = [row["username"] for row in resp.data]
+        self.assertEqual(usernames, ["carol", "dave"])
+
+    def test_recover_resets_password_without_data_loss(self):
+        from cryptography.fernet import Fernet
+
+        from . import vault
+
+        reg = self.client.post(
+            "/api/user/register/", {"username": "bob", "password": "pw-abc-123"}
+        )
+        recovery = reg.data["recovery_key"]
+        user = User.objects.get(username="bob")
+
+        login = self._login("bob", "pw-abc-123")
+        self._auth(login.data["access"])
+        self.client.post("/api/settings/", {"open_ai_api_key": "sk-orig"})
+
+        resp = self.client.post(
+            "/api/vault/recover/",
+            {
+                "username": "bob",
+                "recovery_key": recovery,
+                "new_password": "reset-pw-789",
+            },
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        # Old password no longer works; new one does.
+        self.assertEqual(self._login("bob", "pw-abc-123").status_code, 401)
+        self.assertEqual(self._login("bob", "reset-pw-789").status_code, 200)
+
+        # The secret set before recovery is still intact under the same DEK.
+        dek = vault.get_dek(user.id)
+        vault.set_current_dek(dek)
+        try:
+            self.assertEqual(
+                Settings.objects.get(user=user).open_ai_api_key, "sk-orig"
+            )
+        finally:
+            vault.clear_current_dek()
+
+    def test_recover_wrong_key_rejected(self):
+        from . import vault
+
+        reg = self.client.post(
+            "/api/user/register/", {"username": "bob", "password": "pw-abc-123"}
+        )
+        bad = vault.format_recovery_key(vault.new_recovery_key())
+        resp = self.client.post(
+            "/api/vault/recover/",
+            {"username": "bob", "recovery_key": bad, "new_password": "reset-pw-789"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        # Original password still works (nothing changed).
+        self.assertEqual(self._login("bob", "pw-abc-123").status_code, 200)
+
+    def test_change_password_rewraps_and_keeps_secret(self):
+        from cryptography.fernet import Fernet
+
+        from . import vault
+
+        self.client.post(
+            "/api/user/register/", {"username": "bob", "password": "old-pw-123"}
+        )
+        user = User.objects.get(username="bob")
+        login = self._login("bob", "old-pw-123")
+        self._auth(login.data["access"])
+        self.client.post("/api/settings/", {"open_ai_api_key": "sk-orig"})
+
+        resp = self.client.post(
+            "/api/user/change-password/",
+            {"old_password": "old-pw-123", "new_password": "new-pw-456xyz"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        vault.lock_user(user.id)
+        self.assertEqual(self._login("bob", "new-pw-456xyz").status_code, 200)
+        dek = vault.get_dek(user.id)
+        vault.set_current_dek(dek)
+        try:
+            self.assertEqual(
+                Settings.objects.get(user=user).open_ai_api_key, "sk-orig"
+            )
+        finally:
+            vault.clear_current_dek()
