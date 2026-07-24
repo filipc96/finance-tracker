@@ -8,6 +8,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import StatCard from "../components/StatCard";
 import AddTransaction from "../components/AddTransaction";
+import BudgetAlerts from "../components/BudgetAlerts";
 import ScanReceipt from "../components/ScanReceipt";
 import Chart from "../components/Chart";
 import ChartErrorBoundary from "../components/ChartErrorBoundary";
@@ -140,6 +141,7 @@ const Dashboard = () => {
         </div>
 
         <div className="flex flex-col gap-6 lg:col-span-2">
+          <BudgetAlerts />
           <ScanReceipt callback={getData} className="" />
           <AddTransaction callback={getData} type="expense" className="" />
           <AddTransaction callback={getData} type="income" className="" />
