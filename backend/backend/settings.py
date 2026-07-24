@@ -200,5 +200,10 @@ if DESKTOP_MODE:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWS_CREDENTIALS = True
+# The desktop webview loads the SPA from the sidecar's own origin
+# (http://127.0.0.1:<port>), so every API call is same-origin and needs no CORS
+# grant — allowing all origins there is pure attack surface (any site the user
+# visits could script the local API). The dev/web build serves the SPA from a
+# separate Vite origin, so it still needs cross-origin access. Auth is a JWT in
+# the Authorization header, not a cookie, so credentialed CORS isn't needed.
+CORS_ALLOW_ALL_ORIGINS = not DESKTOP_MODE
