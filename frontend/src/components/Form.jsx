@@ -8,6 +8,7 @@ import { faUser, faLock, faWallet } from "@fortawesome/free-solid-svg-icons";
 import Button from "./ui/Button";
 import PasswordInput from "./ui/PasswordInput";
 import RecoveryKeyPanel from "./RecoveryKeyPanel";
+import { CURRENCY_OPTIONS } from "../utils/formatCurrency";
 
 const Form = ({
   route,
@@ -19,6 +20,10 @@ const Form = ({
 }) => {
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
+  // Base currency is chosen once at registration and then locked (it's the
+  // accounting currency of every stored amount). Only shown on the register
+  // form; login ignores it.
+  const [baseCurrency, setBaseCurrency] = useState("USD");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   // On desktop, registration returns a one-time recovery key we must surface
@@ -32,7 +37,9 @@ const Form = ({
     e.preventDefault();
 
     try {
-      const res = await api.post(route, { username, password });
+      const body = { username, password };
+      if (method != "login") body.base_currency = baseCurrency;
+      const res = await api.post(route, body);
       if (method == "login") {
         localStorage.setItem(ACCESS_TOKEN, res.data.access);
         localStorage.setItem(REFRESH_TOKEN, res.data.refresh);
@@ -111,6 +118,30 @@ const Form = ({
                 placeholder="Your password"
                 required
               />
+
+              {method != "login" && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700">
+                    Base Currency
+                  </label>
+                  <select
+                    value={baseCurrency}
+                    onChange={(e) => setBaseCurrency(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 px-3.5 text-sm text-gray-900
+                      focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    {CURRENCY_OPTIONS.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500">
+                    This can't be changed later — it's the currency your balance
+                    is kept in. You can still view amounts in other currencies.
+                  </p>
+                </div>
+              )}
 
               {onForgotPassword && (
                 <button

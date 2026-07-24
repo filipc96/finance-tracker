@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from . import vault
+from .fx import BASE_CURRENCY, SUPPORTED_CURRENCIES, FxError, to_base
 from .models import (
     Budget,
     Category,
@@ -13,21 +14,67 @@ from .models import (
 )
 
 
+def _validate_currency(code, *, allow_blank=False):
+    """Normalize and validate an ISO 4217 code against the supported set."""
+    if not code:
+        if allow_blank:
+            return ""
+        raise serializers.ValidationError("A currency is required.")
+    code = str(code).upper()
+    if code not in SUPPORTED_CURRENCIES:
+        raise serializers.ValidationError(f"Unsupported currency: {code}.")
+    return code
+
+
 class UserSerializer(serializers.ModelSerializer):
     # Returned exactly once, in the registration response, so the client can
     # show the recovery key. Never stored, never echoed again.
     recovery_key = serializers.CharField(read_only=True)
+    # The account's base currency, chosen once here and then locked. Not a User
+    # field — applied to the auto-created Settings row in create().
+    base_currency = serializers.CharField(
+        write_only=True, required=False, default=BASE_CURRENCY
+    )
 
     class Meta:
         model = User
-        fields = ["id", "username", "password", "recovery_key"]
+        fields = ["id", "username", "password", "recovery_key", "base_currency"]
         extra_kwargs = {"password": {"write_only": True}}
+
+    def validate_base_currency(self, value):
+        return _validate_currency(value)
+
+    def validate(self, attrs):
+        # Enforce AUTH_PASSWORD_VALIDATORS at registration (change-password and
+        # recover already do — see views.py). The password also derives the
+        # vault KEK, so a weak one directly weakens the at-rest encryption.
+        # Validate against an unsaved User so UserAttributeSimilarityValidator
+        # can compare against the chosen username. Errors are re-raised under
+        # the "password" key so the frontend surfaces them (Form.jsx).
+        from django.contrib.auth.password_validation import (
+            validate_password as dj_validate_password,
+        )
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            dj_validate_password(
+                attrs.get("password"), user=User(username=attrs.get("username"))
+            )
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({"password": list(e.messages)})
+        return attrs
 
     def create(self, validated_data):
         from django.conf import settings as django_settings
 
+        # base_currency is a Settings field, not a User field — pull it out
+        # before create_user. It's locked after this, so we set it exactly once.
+        base_currency = validated_data.pop("base_currency", BASE_CURRENCY)
         password = validated_data["password"]
         user = User.objects.create_user(**validated_data)
+        # Settings is auto-created by a post_save signal on User; stamp the
+        # chosen base onto it. display_currency stays blank (== follow base).
+        Settings.objects.filter(user=user).update(base_currency=base_currency)
         user.recovery_key = None
         # Desktop only: build the account's vault from the registration password
         # so its secrets are protected by that password from the first login.
@@ -54,6 +101,8 @@ class SettingsSerializer(serializers.ModelSerializer):
         model = Settings
         fields = [
             "dark_mode",
+            "base_currency",
+            "display_currency",
             "open_ai_api_key",
             "anthropic_api_key",
             "ollama_base_url",
@@ -70,11 +119,19 @@ class SettingsSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             "user": {"read_only": True},
+            # Base is chosen once at registration and locked — echo it back but
+            # never let a settings write change it (the accounting currency of
+            # every stored amount can't move under the data).
+            "base_currency": {"read_only": True},
             "open_ai_api_key": {"write_only": True},
             "anthropic_api_key": {"write_only": True},
             "t212_api_key": {"write_only": True},
             "t212_api_secret": {"write_only": True},
         }
+
+    def validate_display_currency(self, value):
+        # Blank is allowed and means "present amounts in the base currency".
+        return _validate_currency(value, allow_blank=True)
 
     def get_has_open_ai_api_key(self, obj):
         return bool(obj.open_ai_api_key)
@@ -157,6 +214,7 @@ class RecurringTransactionSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "amount",
+            "currency",
             "category",
             "category_name",
             "type",
@@ -175,6 +233,11 @@ class RecurringTransactionSerializer(serializers.ModelSerializer):
         if amount <= 0:
             raise serializers.ValidationError("Amount must be positive.")
         return amount
+
+    def validate_currency(self, value):
+        # The currency `amount` is quoted in. Blank == base; converted to base
+        # when the rule fires (services.process_recurring).
+        return _validate_currency(value, allow_blank=True)
 
     def validate(self, attrs):
         category = attrs.get("category") or (self.instance and self.instance.category)
@@ -242,10 +305,15 @@ class TransactionSerializer(serializers.ModelSerializer):
     # Display-only: the write path sets `category` (a PK). Keeping this writable
     # let a dotted-source write leak into the nested category — a latent bug.
     category_name = serializers.CharField(source="category.name", read_only=True)
+    # Entry currency: the currency the user typed `amount` in. Write-only and
+    # never stored — the amount is converted into the account's base here and
+    # only the base value is persisted, so the ledger (and balance) stay purely
+    # in base. Blank == amount is already in base.
+    currency = serializers.CharField(write_only=True, required=False, default="")
 
     class Meta:
         model = Transaction
-        fields = ["id", "date", "amount", "name", "category_name", "category", "type"]
+        fields = ["id", "date", "amount", "name", "category_name", "category", "type", "currency"]
         extra_kwargs = {"user": {"read_only": True}}
 
     def validate_category(self, category):
@@ -257,3 +325,33 @@ class TransactionSerializer(serializers.ModelSerializer):
         if amount <= 0:
             raise serializers.ValidationError("Amount must be positive.")
         return amount
+
+    def validate_currency(self, value):
+        return _validate_currency(value, allow_blank=True)
+
+    def _apply_entry_currency(self, validated_data):
+        """Convert `amount` from the entry currency into the account's base.
+
+        Pops the non-model `currency` key and, when it differs from base,
+        rewrites `amount` to its base equivalent at today's rate. A blank entry
+        currency (or one equal to base) leaves the amount untouched.
+        """
+        entry_currency = validated_data.pop("currency", "")
+        if "amount" not in validated_data:
+            return validated_data
+        base = self.context["request"].user.settings.base_currency or BASE_CURRENCY
+        entry_currency = entry_currency or base
+        if entry_currency != base:
+            try:
+                validated_data["amount"], _ = to_base(
+                    validated_data["amount"], entry_currency, base
+                )
+            except FxError as e:
+                raise serializers.ValidationError({"currency": str(e)})
+        return validated_data
+
+    def create(self, validated_data):
+        return super().create(self._apply_entry_currency(validated_data))
+
+    def update(self, instance, validated_data):
+        return super().update(instance, self._apply_entry_currency(validated_data))

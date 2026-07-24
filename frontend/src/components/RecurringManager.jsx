@@ -11,11 +11,13 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
 import Button from "./ui/Button";
 import EditRecurringModal from "./EditRecurringModal";
-import { formatAmount } from "../utils/formatCurrency";
+import { formatMoney, CURRENCY_OPTIONS } from "../utils/formatCurrency";
+import { useCurrency } from "../contexts/CurrencyContext";
 
 const emptyForm = {
   name: "",
   amount: "",
+  currency: "",
   category: "",
   type: "expense",
   frequency: "monthly",
@@ -23,12 +25,18 @@ const emptyForm = {
 };
 
 const RecurringManager = ({ onMaterialized }) => {
+  const { baseCurrency } = useCurrency();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all"); // all | active | paused
+
+  // Default the entry currency to base once it resolves (kept editable).
+  useEffect(() => {
+    setForm((prev) => (prev.currency ? prev : { ...prev, currency: baseCurrency }));
+  }, [baseCurrency]);
 
   const getItems = () => {
     api
@@ -58,7 +66,7 @@ const RecurringManager = ({ onMaterialized }) => {
       .post("/api/recurring/", form)
       .then(() => {
         toast.success("Recurring transaction added.");
-        setForm(emptyForm);
+        setForm({ ...emptyForm, currency: baseCurrency });
         getItems();
         if (onMaterialized) onMaterialized();
       })
@@ -139,6 +147,19 @@ const RecurringManager = ({ onMaterialized }) => {
           onChange={setField("amount")}
           className={`${inputClass} w-28`}
         />
+        <select
+          value={form.currency || baseCurrency}
+          onChange={setField("currency")}
+          className={inputClass}
+          title="Currency the amount is in (converted to base when it fires)"
+        >
+          {CURRENCY_OPTIONS.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code}
+              {c.code === baseCurrency ? " (base)" : ""}
+            </option>
+          ))}
+        </select>
         <select
           value={form.type}
           onChange={(e) =>
@@ -233,7 +254,12 @@ const RecurringManager = ({ onMaterialized }) => {
                   </span>
                 )}
               </span>
-              <span className="w-24">{formatAmount(item.amount)}</span>
+              {/* Amount is stored in the item's own entry currency (converted
+                  to base only when it fires), so show it in that currency with
+                  no display-rate conversion (rate 1). */}
+              <span className="w-24">
+                {formatMoney(item.amount, item.currency || baseCurrency, 1)}
+              </span>
               <span className="w-24 capitalize">{item.type}</span>
               <span className="w-28">{item.category_name}</span>
               <span className="w-24 capitalize">{item.frequency}</span>

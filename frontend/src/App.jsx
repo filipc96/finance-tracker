@@ -18,6 +18,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { lazy, useEffect } from "react";
 import { Toaster } from "react-hot-toast";
 
@@ -146,7 +147,9 @@ function App() {
           path="/"
           element={
             <ThemeProvider>
-              <SharedLayout menuItems={menuItems} />
+              <CurrencyProvider>
+                <SharedLayout menuItems={menuItems} />
+              </CurrencyProvider>
             </ThemeProvider>
           }
         >

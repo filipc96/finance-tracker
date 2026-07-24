@@ -1,8 +1,8 @@
 import { Chart as ChartJS, BarElement } from "chart.js";
 import { Chart } from "react-chartjs-2";
 import { useTheme } from "../contexts/ThemeContext";
+import { useCurrency } from "../contexts/CurrencyContext";
 import { buildLineOptions } from "../utils/chartTheme";
-import { DEFAULT_CURRENCY } from "../utils/formatCurrency";
 
 ChartJS.register(BarElement);
 
@@ -23,6 +23,7 @@ const MONTH_LABELS = [
 
 const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
   const { darkMode } = useTheme();
+  const { displayCurrency, displayRate } = useCurrency();
 
   const data = {
     labels: MONTH_LABELS,
@@ -72,7 +73,10 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
       <Chart
         type="bar"
         data={data}
-        options={buildLineOptions(darkMode, { currency: DEFAULT_CURRENCY })}
+        options={buildLineOptions(darkMode, {
+          currency: displayCurrency,
+          rate: displayRate,
+        })}
       />
     </>
   );

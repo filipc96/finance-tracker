@@ -2,6 +2,8 @@ import ToggleButton from "../components/ToggleButton";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTheme } from "../contexts/ThemeContext";
+import { useCurrency } from "../contexts/CurrencyContext";
+import { CURRENCY_OPTIONS } from "../utils/formatCurrency";
 import api from "../api";
 import toast from "react-hot-toast";
 import Card from "../components/ui/Card";
@@ -12,6 +14,7 @@ import Button from "../components/ui/Button";
 
 const Settings = () => {
   const { darkMode } = useTheme();
+  const { baseCurrency, displayCurrency, changeDisplay } = useCurrency();
   const [apiKey, setApiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [llmProvider, setLlmProvider] = useState("openai");
@@ -109,11 +112,43 @@ const Settings = () => {
         title="Appearance"
         description="How the app looks on this device."
       >
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Dark Mode
-          </span>
-          <ToggleButton />
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Dark Mode
+            </span>
+            <ToggleButton />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Base Currency
+              </span>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Chosen at sign-up and locked — every stored amount is in this
+                currency.
+              </p>
+            </div>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
+              {baseCurrency}
+            </span>
+          </div>
+          <Select
+            label="Display Currency"
+            value={displayCurrency}
+            onChange={(e) => changeDisplay(e.target.value)}
+          >
+            {CURRENCY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} — {c.label}
+                {c.code === baseCurrency ? " (base)" : ""}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+            Amounts are converted from {baseCurrency} for display only — your
+            data isn't changed.
+          </p>
         </div>
       </Card>
 

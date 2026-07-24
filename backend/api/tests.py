@@ -58,6 +58,17 @@ class AuthTests(APITestCase):
         self.assertTrue(Settings.objects.filter(user=user).exists())
         self.assertEqual(user.account.balance, Decimal("0.00"))
 
+    def test_register_rejects_weak_password(self):
+        # The registration password also derives the vault KEK, so it must run
+        # through AUTH_PASSWORD_VALIDATORS like change-password and recover do.
+        response = self.client.post(
+            "/api/user/register/",
+            {"username": "weakling", "password": "1"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password", response.data)
+        self.assertFalse(User.objects.filter(username="weakling").exists())
+
     def test_token_obtain(self):
         create_user("alice", "test-pass-123")
         response = self.client.post(
@@ -875,7 +886,7 @@ class StocksTests(APITestCase):
         # made. Returns (amount unchanged, rate 1) — base_value == total_value.
         fx_patcher = patch(
             "api.views.to_base",
-            side_effect=lambda amount, currency, on=None: (
+            side_effect=lambda amount, currency, base=None, on=None: (
                 Decimal(str(amount)),
                 Decimal("1"),
             ),
@@ -1315,20 +1326,34 @@ class FxTests(APITestCase):
         from .models import ExchangeRate
 
         mock_get.return_value = self._api_response({"RSD": 100.0})
-        value, rate = to_base(Decimal("10.00"), "USD")
+        value, rate = to_base(Decimal("10.00"), "USD", "RSD")
         self.assertEqual(value, Decimal("1000.00"))
         self.assertEqual(rate, Decimal("100"))
         self.assertEqual(ExchangeRate.objects.count(), 1)
 
         # Second call is served from cache — no second HTTP hit.
-        to_base(Decimal("5.00"), "USD")
+        to_base(Decimal("5.00"), "USD", "RSD")
         self.assertEqual(mock_get.call_count, 1)
+
+    @patch("api.fx.requests.get")
+    def test_converts_to_explicit_base(self, mock_get):
+        # The base is now a parameter (per-user Settings.base_currency); a
+        # caller can target any currency, not just the module default.
+        from .fx import to_base
+
+        mock_get.return_value = self._api_response({"EUR": 0.5})
+        value, rate = to_base(Decimal("10.00"), "USD", "EUR")
+        self.assertEqual(value, Decimal("5.00"))
+        self.assertEqual(rate, Decimal("0.5"))
+        mock_get.assert_called_once_with(
+            "https://open.er-api.com/v6/latest/USD", timeout=10
+        )
 
     @patch("api.fx.requests.get")
     def test_same_currency_is_identity(self, mock_get):
         from .fx import to_base
 
-        value, rate = to_base(Decimal("42.00"), "RSD")
+        value, rate = to_base(Decimal("42.00"), "RSD", "RSD")
         self.assertEqual(value, Decimal("42.00"))
         self.assertEqual(rate, Decimal("1"))
         mock_get.assert_not_called()
@@ -1340,7 +1365,7 @@ class FxTests(APITestCase):
 
         mock_get.side_effect = _requests.RequestException("boom")
         with self.assertRaises(FxError):
-            to_base(Decimal("1.00"), "USD")
+            to_base(Decimal("1.00"), "USD", "RSD")
 
 
 class LLMTokenParamTests(APITestCase):
@@ -1558,6 +1583,231 @@ class ReceiptUnitTests(APITestCase):
 
         with self.assertRaises(ReceiptError):
             parse_receipt("ocr", {}, [])
+
+
+class BaseCurrencyTests(APITestCase):
+    """base_currency is chosen once at registration and then locked; the
+    settings endpoint echoes it but must never change it."""
+
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+
+    def test_default_is_usd_for_new_user(self):
+        # The auto-create signal builds Settings with the field default.
+        response = self.client.get("/api/settings/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["base_currency"], "USD")
+
+    def test_base_currency_is_read_only(self):
+        # Attempting to change the locked base via settings is silently ignored
+        # (read-only field), leaving the stored accounting currency intact.
+        response = self.client.post(
+            "/api/settings/", {"base_currency": "EUR"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["base_currency"], "USD")
+        self.user.settings.refresh_from_db()
+        self.assertEqual(self.user.settings.base_currency, "USD")
+
+    def test_display_currency_round_trips(self):
+        # Display currency is the switchable presentation preference.
+        response = self.client.post(
+            "/api/settings/", {"display_currency": "EUR"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["display_currency"], "EUR")
+        self.user.settings.refresh_from_db()
+        self.assertEqual(self.user.settings.display_currency, "EUR")
+
+    def test_display_currency_rejects_unsupported(self):
+        response = self.client.post(
+            "/api/settings/", {"display_currency": "ZZZ"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_registration_sets_base_currency(self):
+        response = self.client.post(
+            "/api/user/register/",
+            {"username": "bob", "password": "test-pass-123", "base_currency": "eur"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        bob = User.objects.get(username="bob")
+        self.assertEqual(bob.settings.base_currency, "EUR")
+
+    def test_registration_defaults_base_to_usd(self):
+        response = self.client.post(
+            "/api/user/register/",
+            {"username": "carol", "password": "test-pass-123"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        carol = User.objects.get(username="carol")
+        self.assertEqual(carol.settings.base_currency, "USD")
+
+    def test_registration_rejects_unsupported_base(self):
+        response = self.client.post(
+            "/api/user/register/",
+            {"username": "dave", "password": "test-pass-123", "base_currency": "ZZZ"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(username="dave").exists())
+
+
+class EntryCurrencyTests(APITestCase):
+    """New transactions/recurring can be entered in any currency; the amount is
+    converted into the account's base before it touches the ledger/balance."""
+
+    def setUp(self):
+        self.user = create_user("alice")  # base defaults to USD
+        self.client.force_authenticate(self.user)
+        self.expense = Category.objects.create(
+            user=self.user, name="Food", type="expense"
+        )
+        self.income = Category.objects.create(
+            user=self.user, name="Salary", type="income"
+        )
+
+    def refresh_balance(self):
+        self.user.account.refresh_from_db()
+        return self.user.account.balance
+
+    @patch("api.fx.get_rate")
+    def test_entry_currency_converts_to_base_on_create(self, mock_rate):
+        # 50 EUR at 1.1 EUR->USD == 55.00 USD stored; balance drops by 55.
+        mock_rate.return_value = Decimal("1.1")
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "date": "2026-01-01",
+                "amount": "50.00",
+                "name": "groceries",
+                "category": self.expense.id,
+                "type": "expense",
+                "currency": "EUR",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        tx = Transaction.objects.get(pk=response.data["id"])
+        self.assertEqual(tx.amount, Decimal("55.00"))
+        self.assertEqual(self.refresh_balance(), Decimal("-55.00"))
+        mock_rate.assert_called_once_with("EUR", "USD", on=None)
+
+    @patch("api.fx.get_rate")
+    def test_base_entry_currency_skips_fx(self, mock_rate):
+        # Entry currency equal to (or blank ==) base performs no conversion.
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "date": "2026-01-01",
+                "amount": "40.00",
+                "name": "lunch",
+                "category": self.expense.id,
+                "type": "expense",
+                "currency": "USD",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        tx = Transaction.objects.get(pk=response.data["id"])
+        self.assertEqual(tx.amount, Decimal("40.00"))
+        mock_rate.assert_not_called()
+
+    @patch("api.fx.get_rate")
+    def test_blank_entry_currency_stores_amount_as_is(self, mock_rate):
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "date": "2026-01-01",
+                "amount": "12.34",
+                "name": "coffee",
+                "category": self.expense.id,
+                "type": "expense",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            Transaction.objects.get(pk=response.data["id"]).amount,
+            Decimal("12.34"),
+        )
+        mock_rate.assert_not_called()
+
+    @patch("api.fx.get_rate")
+    def test_recurring_currency_converts_at_fire_time(self, mock_rate):
+        from .services import process_recurring
+
+        mock_rate.return_value = Decimal("1.1")
+        RecurringTransaction.objects.create(
+            user=self.user,
+            name="Netflix",
+            amount=Decimal("15.00"),
+            currency="EUR",
+            category=self.expense,
+            type="expense",
+            frequency="monthly",
+            next_due=date(2026, 1, 1),
+        )
+        created = process_recurring(self.user)
+        self.assertGreaterEqual(created, 1)
+        # Each materialized transaction is stored in base (15 EUR * 1.1 = 16.50).
+        tx = Transaction.objects.filter(name="Netflix").first()
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.amount, Decimal("16.50"))
+
+    @patch("api.fx.get_rate")
+    def test_recurring_fx_failure_skips_without_advancing(self, mock_rate):
+        from .fx import FxError
+        from .services import process_recurring
+
+        mock_rate.side_effect = FxError("no rate")
+        item = RecurringTransaction.objects.create(
+            user=self.user,
+            name="Spotify",
+            amount=Decimal("10.00"),
+            currency="EUR",
+            category=self.expense,
+            type="expense",
+            frequency="monthly",
+            next_due=date(2026, 1, 1),
+        )
+        created = process_recurring(self.user)
+        self.assertEqual(created, 0)
+        self.assertFalse(Transaction.objects.filter(name="Spotify").exists())
+        item.refresh_from_db()
+        self.assertEqual(item.next_due, date(2026, 1, 1))  # not advanced
+
+
+class FxRateEndpointTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")  # base USD
+        self.client.force_authenticate(self.user)
+
+    @patch("api.views.get_rate")
+    def test_returns_base_to_quote_rate(self, mock_rate):
+        mock_rate.return_value = Decimal("1.1")
+        response = self.client.get("/api/fx/rate/?to=EUR")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["base"], "USD")
+        self.assertEqual(response.data["quote"], "EUR")
+        self.assertEqual(response.data["rate"], "1.1")
+        self.assertTrue(response.data["available"])
+
+    @patch("api.views.get_rate")
+    def test_degrades_to_identity_on_fx_failure(self, mock_rate):
+        from .fx import FxError
+
+        mock_rate.side_effect = FxError("boom")
+        response = self.client.get("/api/fx/rate/?to=EUR")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["rate"], "1")
+        self.assertFalse(response.data["available"])
+
+    def test_missing_quote_defaults_to_base_identity(self):
+        response = self.client.get("/api/fx/rate/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["quote"], "USD")
+        self.assertEqual(response.data["rate"], "1")
 
 
 class EncryptedKeyTests(APITestCase):

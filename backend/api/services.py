@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 from django.db import transaction as db_transaction
 from django.db.models import Sum
 
+from .fx import BASE_CURRENCY, FxError, to_base
 from .models import (
     Account,
     NetWorthSnapshot,
@@ -39,18 +40,33 @@ def process_recurring(user):
     today = date.today()
     created = 0
 
+    base = user.settings.base_currency or BASE_CURRENCY
+
     due_items = RecurringTransaction.objects.filter(
         user=user, active=True, next_due__lte=today
     ).select_related("category")
 
     for item in due_items:
+        # Convert the rule's amount into base once per run. A blank/base entry
+        # currency needs no FX; a differing one is converted at today's rate. If
+        # the rate can't be resolved we skip this item this run (leave next_due
+        # untouched) so it retries next time rather than posting a wrong amount.
+        entry_currency = item.currency or base
+        if entry_currency == base:
+            base_amount = item.amount
+        else:
+            try:
+                base_amount, _ = to_base(item.amount, entry_currency, base)
+            except FxError:
+                continue
+
         delta = FREQUENCY_DELTAS[item.frequency]
         iterations = 0
         while item.next_due <= today and iterations < MAX_MATERIALIZATIONS_PER_ITEM:
             Transaction.objects.create(
                 user=user,
                 date=item.next_due,
-                amount=item.amount,
+                amount=base_amount,
                 name=item.name,
                 category=item.category,
                 type=item.type,

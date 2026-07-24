@@ -41,6 +41,15 @@ class Settings(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     dark_mode = models.BooleanField(default=False)
+    # ISO 4217 code the account is denominated in. Chosen once at registration
+    # and then LOCKED (the serializer rejects changes): every stored amount and
+    # the balance live in this currency. New installs default to USD; the
+    # migration backfills pre-existing rows to RSD.
+    base_currency = models.CharField(max_length=3, default="USD")
+    # Optional presentation currency. Blank == "show amounts in base_currency".
+    # Purely a view preference — amounts are converted base->display at render
+    # time (frontend) and never rewritten, so switching it is non-destructive.
+    display_currency = models.CharField(max_length=3, blank=True, default="")
     open_ai_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
     anthropic_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
     ollama_base_url = models.CharField(max_length=255, blank=True)
@@ -249,6 +258,11 @@ class RecurringTransaction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # Currency `amount` is expressed in. Blank == base currency. When the rule
+    # fires (services.process_recurring), the amount is converted from this
+    # currency into the account's base before the Transaction is created, so
+    # the balance stays purely in base.
+    currency = models.CharField(max_length=3, blank=True, default="")
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     type = models.CharField(max_length=7, choices=TYPE_CHOICES)
     frequency = models.CharField(max_length=7, choices=FREQUENCY_CHOICES)

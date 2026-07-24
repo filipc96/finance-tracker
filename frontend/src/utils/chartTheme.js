@@ -2,6 +2,7 @@
 // instead of reading document.documentElement on each render.
 
 import { Chart as ChartJS, registerables } from "chart.js";
+import { formatMoney } from "./formatCurrency";
 
 // Register every chart.js controller/element/scale once, app-wide. This lives
 // here (not in main.jsx) so chart.js stays out of the entry bundle: every chart
@@ -26,21 +27,25 @@ export const getChartTheme = (darkMode) => ({
   pieBorderColor: darkMode ? "#1a1c23" : "#ffffff",
 });
 
-// Compact money label for axis ticks: 187247.73 -> "187,248". Full precision
-// with the currency label is used in tooltips instead.
-const compactMoney = (value) =>
-  Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
+// Compact money label for axis ticks: base 187247.73 at rate 1 -> "187,248".
+// The chart data is in base currency, so `rate` converts to the display one.
+const compactMoney = (value, rate = 1) =>
+  (Number(value) * (Number(rate) || 1)).toLocaleString(undefined, {
+    maximumFractionDigits: 0,
+  });
 
-const fullMoney = (value, currency) =>
-  `${Number(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency}`;
+// Symbol-aware full-precision label for tooltips ("$1,234.56" / "1,234.56 RSD").
+// `value` is in base; formatMoney applies the base->display `rate`.
+const fullMoney = (value, currency, rate) => formatMoney(value, currency, rate);
 
-// Pass `currency` to label the y-axis ticks and tooltips (e.g. net worth in
-// RSD). `extra` is deep-ish merged so callers can override without dropping
-// the theme colors / currency callbacks configured here.
-export const buildLineOptions = (darkMode, { currency, ...extra } = {}) => {
+// Pass `currency` + `rate` to label the y-axis ticks and tooltips in the display
+// currency (chart data stays in base; rate converts it). `extra` is deep-ish
+// merged so callers can override without dropping the theme colors / currency
+// callbacks configured here.
+export const buildLineOptions = (
+  darkMode,
+  { currency, rate = 1, ...extra } = {}
+) => {
   const { textColor, gridColor } = getChartTheme(darkMode);
   return {
     responsive: true,
@@ -55,7 +60,7 @@ export const buildLineOptions = (darkMode, { currency, ...extra } = {}) => {
         tooltip: {
           callbacks: {
             label: (ctx) =>
-              `${ctx.dataset.label}: ${fullMoney(ctx.parsed.y, currency)}`,
+              `${ctx.dataset.label}: ${fullMoney(ctx.parsed.y, currency, rate)}`,
           },
         },
       }),
@@ -70,7 +75,7 @@ export const buildLineOptions = (darkMode, { currency, ...extra } = {}) => {
         grid: { color: gridColor },
         ticks: {
           color: textColor,
-          ...(currency && { callback: (v) => compactMoney(v) }),
+          ...(currency && { callback: (v) => compactMoney(v, rate) }),
         },
       },
       ...extra.scales,

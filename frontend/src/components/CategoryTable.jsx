@@ -1,7 +1,7 @@
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import DataTable from "./ui/DataTable";
-import { formatAmount } from "../utils/formatCurrency";
+import { formatMoney } from "../utils/formatCurrency";
 
 // Client-sorted table over the full (already-loaded) category list.
 const CategoryTable = ({ categories, onDelete }) => {
@@ -18,11 +18,11 @@ const CategoryTable = ({ categories, onDelete }) => {
       render: (c) =>
         c.type === "expense" ? (
           <span className="text-red-500">
-            -{formatAmount(c.transactions_sum)}
+            -{formatMoney(c.transactions_sum)}
           </span>
         ) : (
           <span className="text-green-500">
-            +{formatAmount(c.transactions_sum)}
+            +{formatMoney(c.transactions_sum)}
           </span>
         ),
     },

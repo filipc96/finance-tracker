@@ -13,16 +13,14 @@ import ScanReceipt from "../components/ScanReceipt";
 import Chart from "../components/Chart";
 import ChartErrorBoundary from "../components/ChartErrorBoundary";
 import Card from "../components/ui/Card";
-import {
-  formatCurrency,
-  formatWhole,
-  DEFAULT_CURRENCY,
-} from "../utils/formatCurrency";
+import { formatMoney, formatWhole } from "../utils/formatCurrency";
+import { useCurrency } from "../contexts/CurrencyContext";
 import api from "../api";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 
 const Dashboard = () => {
+  const { displayCurrency, displayRate } = useCurrency();
   const [username, setUsername] = useState("");
   const [balance, setBalance] = useState(0);
   const [netWorth, setNetWorth] = useState(null);
@@ -86,24 +84,28 @@ const Dashboard = () => {
         <StatCard
           icon={faScaleBalanced}
           label="Net Worth"
-          value={formatWhole(netWorth, DEFAULT_CURRENCY)}
+          value={formatWhole(netWorth, displayCurrency, displayRate)}
           subtext="Balance + savings + stocks"
         />
         <StatCard
           icon={faWallet}
           label="Balance"
-          value={formatCurrency(balance)}
+          value={formatMoney(balance, displayCurrency, displayRate)}
         />
         <StatCard
           icon={faArrowTrendDown}
           label="Total Spent"
-          value={formatCurrency(allTimeSpent)}
+          value={formatMoney(allTimeSpent, displayCurrency, displayRate)}
           tone="negative"
         />
         <StatCard
           icon={faArrowUp}
           label="Latest Income"
-          value={latestIncome ? formatCurrency(latestIncome.amount) : "—"}
+          value={
+            latestIncome
+              ? formatMoney(latestIncome.amount, displayCurrency, displayRate)
+              : "—"
+          }
           subtext={
             latestIncome
               ? `${latestIncome.name} · ${formatDate(latestIncome.date)}`
@@ -114,7 +116,11 @@ const Dashboard = () => {
         <StatCard
           icon={faArrowDown}
           label="Latest Expense"
-          value={latestExpense ? formatCurrency(latestExpense.amount) : "—"}
+          value={
+            latestExpense
+              ? formatMoney(latestExpense.amount, displayCurrency, displayRate)
+              : "—"
+          }
           subtext={
             latestExpense
               ? `${latestExpense.name} · ${formatDate(latestExpense.date)}`

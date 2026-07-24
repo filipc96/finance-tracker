@@ -12,8 +12,8 @@ import {
 } from "chart.js";
 import api from "../api";
 import { useTheme } from "../contexts/ThemeContext";
+import { useCurrency } from "../contexts/CurrencyContext";
 import { buildLineOptions } from "../utils/chartTheme";
-import { DEFAULT_CURRENCY } from "../utils/formatCurrency";
 
 ChartJS.register(
   CategoryScale,
@@ -27,6 +27,7 @@ ChartJS.register(
 
 const NetWorthChart = () => {
   const { darkMode } = useTheme();
+  const { displayCurrency, displayRate } = useCurrency();
   const [series, setSeries] = useState([]);
   const [months, setMonths] = useState(12);
 
@@ -92,7 +93,10 @@ const NetWorthChart = () => {
       ) : (
         <Line
           data={data}
-          options={buildLineOptions(darkMode, { currency: DEFAULT_CURRENCY })}
+          options={buildLineOptions(darkMode, {
+            currency: displayCurrency,
+            rate: displayRate,
+          })}
         />
       )}
     </>

@@ -4,14 +4,19 @@ import api from "../api";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
 import Button from "./ui/Button";
+import { CURRENCY_OPTIONS } from "../utils/formatCurrency";
+import { useCurrency } from "../contexts/CurrencyContext";
 
 // Edit an existing recurring rule. Type is fixed (the category list is scoped to
-// the rule's type) — matching how transactions are edited. Amount/category/
-// frequency/next_due changes take effect on the next materialization run.
+// the rule's type) — matching how transactions are edited. Amount/currency/
+// category/frequency/next_due changes take effect on the next materialization
+// run.
 const EditRecurringModal = ({ item, onClose, onUpdated }) => {
+  const { baseCurrency } = useCurrency();
   const [categories, setCategories] = useState([]);
   const [name, setName] = useState(item.name);
   const [amount, setAmount] = useState(String(item.amount));
+  const [currency, setCurrency] = useState(item.currency || baseCurrency);
   const [category, setCategory] = useState(String(item.category));
   const [frequency, setFrequency] = useState(item.frequency);
   const [nextDue, setNextDue] = useState(item.next_due);
@@ -43,6 +48,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
       .patch(`/api/recurring/update/${item.id}`, {
         name,
         amount,
+        currency,
         category,
         frequency,
         next_due: nextDue,
@@ -93,6 +99,18 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
               onChange={(e) => setAmount(e.target.value)}
               required
             />
+            <Select
+              label="Currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+            >
+              {CURRENCY_OPTIONS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} — {c.label}
+                  {c.code === baseCurrency ? " (base)" : ""}
+                </option>
+              ))}
+            </Select>
             <Select
               label="Category"
               value={category}

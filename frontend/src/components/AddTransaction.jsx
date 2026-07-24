@@ -8,14 +8,26 @@ import { format } from "date-fns";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
 import Button from "./ui/Button";
+import { useCurrency } from "../contexts/CurrencyContext";
+import { CURRENCY_OPTIONS } from "../utils/formatCurrency";
 
 const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
+  const { baseCurrency } = useCurrency();
   const [categories, setCategories] = useState([]);
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
+  // Currency the amount is typed in; the backend converts it to the base
+  // currency before storing. Defaults to base (no conversion).
+  const [currency, setCurrency] = useState(baseCurrency);
   const [name, setName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Once the base currency resolves from the API, default the entry currency to
+  // it (users can still switch to enter an amount in another currency).
+  useEffect(() => {
+    setCurrency(baseCurrency);
+  }, [baseCurrency]);
 
   useEffect(() => {
     api
@@ -45,6 +57,7 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
           date: formattedDate,
           amount: amount,
           category: category,
+          currency: currency,
         })
         .then(() => {
           toast.success(`${type === "expense" ? "Expense" : "Income"} added.`);
@@ -87,14 +100,33 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
             required
           />
           <Select
-            label="Category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            label="Currency"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
           >
-            <option value="">Select category</option>
-            {categoryOptions}
+            {CURRENCY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} — {c.label}
+                {c.code === baseCurrency ? " (base)" : ""}
+              </option>
+            ))}
           </Select>
         </div>
+
+        <Select
+          label="Category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="">Select category</option>
+          {categoryOptions}
+        </Select>
+
+        {currency !== baseCurrency && (
+          <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Converted to {baseCurrency} at today's rate when saved.
+          </p>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-200">

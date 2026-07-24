@@ -13,9 +13,20 @@ import requests
 
 from .models import ExchangeRate
 
-# Base currency the whole app is denominated in (matches the frontend's
-# DEFAULT_CURRENCY). Kept here as the single backend source of truth.
-BASE_CURRENCY = "RSD"
+# Fallback base currency when a caller doesn't pass one. The real base is a
+# per-user setting (Settings.base_currency); this is only the default for
+# callers that predate the setting or run outside a request.
+BASE_CURRENCY = "USD"
+
+# ISO 4217 codes the app offers for base / display / entry currency. Kept in
+# sync with the frontend CURRENCY_OPTIONS list; used to validate user input so
+# a typo can't reach the FX API. Base/display/entry are all constrained to it.
+SUPPORTED_CURRENCIES = frozenset(
+    {
+        "USD", "EUR", "GBP", "JPY", "CNY", "CHF", "AUD", "CAD", "NZD", "INR",
+        "BRL", "ZAR", "KRW", "RUB", "TRY", "PLN", "SEK", "NOK", "DKK", "RSD",
+    }
+)
 
 # open.er-api.com: free, no API key, returns {"result":"success","rates":{...}}
 _FX_URL = "https://open.er-api.com/v6/latest/{base}"
@@ -73,11 +84,13 @@ def get_rate(base, quote, on=None):
     return rate
 
 
-def to_base(amount, currency, on=None):
-    """Convert `amount` in `currency` into BASE_CURRENCY, rounded to cents.
+def to_base(amount, currency, base=BASE_CURRENCY, on=None):
+    """Convert `amount` in `currency` into `base`, rounded to cents.
 
-    Returns (base_value: Decimal, rate: Decimal). Raises FxError on failure.
+    `base` defaults to the module fallback but callers should pass the user's
+    Settings.base_currency. Returns (base_value: Decimal, rate: Decimal).
+    Raises FxError on failure.
     """
-    rate = get_rate(currency, BASE_CURRENCY, on=on)
+    rate = get_rate(currency, base, on=on)
     value = (Decimal(str(amount)) * rate).quantize(Decimal("0.01"))
     return value, rate

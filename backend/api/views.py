@@ -44,7 +44,7 @@ from .services import (
     process_savings_interest,
     upsert_net_worth_snapshot,
 )
-from .fx import to_base, FxError, BASE_CURRENCY
+from .fx import to_base, get_rate, FxError, BASE_CURRENCY
 from django.db import transaction as db_transaction
 from django.shortcuts import get_object_or_404
 from .t212 import T212AuthError, T212Client, T212Error, T212RateLimited
@@ -243,6 +243,37 @@ class SettingsListCreate(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FxRate(APIView):
+    """Latest base->quote rate, for the frontend's display-currency conversion.
+
+    The base is the user's locked accounting currency; the quote comes from
+    ?to=<code>. Amounts are stored in base, so multiplying by this rate is how
+    the UI relabels everything into whatever display currency the user picked.
+    On an FX failure we degrade to rate 1 with available=False rather than error
+    so the UI can fall back to showing base amounts.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        base = request.user.settings.base_currency or BASE_CURRENCY
+        quote = (request.query_params.get("to") or "").strip().upper() or base
+        try:
+            rate = get_rate(base, quote)
+            available = True
+        except FxError:
+            rate = Decimal("1")
+            available = False
+        return Response(
+            {
+                "base": base,
+                "quote": quote,
+                "rate": str(rate),
+                "available": available,
+            }
+        )
 
 
 class TransactionPagination(PageNumberPagination):
@@ -610,16 +641,17 @@ class StocksPortfolio(APIView):
 
         total_value = cash + positions_value
 
-        # Convert the native-currency total into the app's base currency (RSD)
-        # so net worth can sum stocks + savings + balance consistently.
+        # Convert the native-currency total into the user's base currency so
+        # net worth can sum stocks + savings + balance consistently.
+        base_currency = settings.base_currency or BASE_CURRENCY
         fx_warning = None
         try:
-            base_value, fx_rate = to_base(total_value, currency)
+            base_value, fx_rate = to_base(total_value, currency, base_currency)
         except FxError:
             base_value, fx_rate = total_value, None
             fx_warning = (
                 "Exchange rate unavailable — portfolio not converted to "
-                f"{BASE_CURRENCY}."
+                f"{base_currency}."
             )
 
         snapshot, _ = PortfolioSnapshot.objects.update_or_create(

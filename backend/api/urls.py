@@ -53,6 +53,7 @@ urlpatterns = [
         name="expense-by-time",
     ),
     path("settings/", views.SettingsListCreate.as_view(), name="settings"),
+    path("fx/rate/", views.FxRate.as_view(), name="fx-rate"),
     path("chat/", views.ChatView.as_view(), name="chat"),
     path("receipts/scan/", views.ReceiptScanView.as_view(), name="receipt-scan"),
     path("chat/providers/", views.ChatProviders.as_view(), name="chat-providers"),

@@ -4,7 +4,7 @@ import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
 import Card from "./ui/Card";
-import { formatAmount } from "../utils/formatCurrency";
+import { formatMoney } from "../utils/formatCurrency";
 
 // Compact current-month budget status for the dashboard. Surfaces categories
 // that are near (>=75%) or over their limit so the user sees trouble without
@@ -68,7 +68,7 @@ const BudgetAlerts = () => {
                     {b.category_name}
                   </span>
                   <span className="text-gray-600 dark:text-gray-300">
-                    {formatAmount(b.spent)} / {formatAmount(b.limit)}
+                    {formatMoney(b.spent)} / {formatMoney(b.limit)}
                   </span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">

@@ -1,7 +1,7 @@
 import { faTrash, faPen } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import DataTable from "./ui/DataTable";
-import { formatAmount } from "../utils/formatCurrency";
+import { formatMoney } from "../utils/formatCurrency";
 
 // Server-sorted table: column `key`s match the backend `ordering` whitelist, and
 // History passes `sort`/`onSortChange` so header clicks refetch in the new order.
@@ -16,9 +16,9 @@ const TransactionTable = ({ transactions, onDelete, onEdit, sort, onSortChange }
       sortable: true,
       render: (t) =>
         t.type === "expense" ? (
-          <span className="text-red-500">-{formatAmount(t.amount)}</span>
+          <span className="text-red-500">-{formatMoney(t.amount)}</span>
         ) : (
-          <span className="text-green-500">+{formatAmount(t.amount)}</span>
+          <span className="text-green-500">+{formatMoney(t.amount)}</span>
         ),
     },
     { key: "date", header: "Date", align: "right", sortable: true },
