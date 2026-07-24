@@ -2,7 +2,7 @@ import { Outlet } from "react-router";
 import NavigationBar from "../components/NavigationBar";
 import Terminal from "../components/Terminal";
 import Chat from "../components/Chat";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import api from "../api";
 import { ACCESS_TOKEN } from "../constants";
@@ -117,7 +117,15 @@ const SharedLayout = ({ menuItems }) => {
       `}
       >
         <div className="flex flex-col py-8 px-4 sm:px-6 md:px-10 lg:px-16 h-screen overflow-y-auto w-full">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full text-gray-400">
+                Loading…
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 

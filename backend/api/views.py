@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser
+from rest_framework.throttling import ScopedRateThrottle
 from .serializers import (
     BudgetSerializer,
     CategorySerializer,
@@ -190,6 +191,9 @@ class VaultRecoverView(APIView):
     """
 
     permission_classes = [AllowAny]
+    # Rate-limit recovery attempts per IP (see DEFAULT_THROTTLE_RATES["recover"]).
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "recover"
 
     def post(self, request):
         username = request.data.get("username", "")

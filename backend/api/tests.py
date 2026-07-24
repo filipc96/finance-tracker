@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -41,6 +42,11 @@ def create_transaction(user, category, amount, type=None, date="2026-01-15", nam
 
 
 class AuthTests(APITestCase):
+    def setUp(self):
+        # Login is ScopedRateThrottle'd; the LocMem cache persists across test
+        # methods, so start each with an empty throttle bucket.
+        cache.clear()
+
     def test_register_creates_account_and_settings(self):
         response = self.client.post(
             "/api/user/register/",
@@ -72,6 +78,16 @@ class AuthTests(APITestCase):
             self.assertEqual(
                 response.status_code, status.HTTP_401_UNAUTHORIZED, url
             )
+
+    def test_login_throttled_after_burst(self):
+        create_user("alice", "test-pass-123")
+        last = None
+        for _ in range(11):
+            last = self.client.post(
+                "/api/token/", {"username": "alice", "password": "test-pass-123"}
+            )
+        # 10/min allowed, the 11th within the window is blocked.
+        self.assertEqual(last.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
 class TransactionTests(APITestCase):
@@ -1660,6 +1676,11 @@ class VaultApiTests(APITestCase):
 
     The vault is a desktop feature, so these run with DESKTOP_MODE forced on.
     """
+
+    def setUp(self):
+        # /api/token/ and /api/vault/recover/ are throttled; clear the shared
+        # LocMem throttle bucket so per-method login bursts don't accumulate.
+        cache.clear()
 
     def tearDown(self):
         from . import vault

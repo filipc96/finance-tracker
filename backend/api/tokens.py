@@ -12,6 +12,7 @@ keyfile-encrypted secrets to the DEK, returning a one-time `recovery_key`.
 """
 
 from django.conf import settings as django_settings
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -40,3 +41,6 @@ class VaultTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class VaultTokenObtainPairView(TokenObtainPairView):
     serializer_class = VaultTokenObtainPairSerializer
+    # Rate-limit login attempts per IP (see DEFAULT_THROTTLE_RATES["login"]).
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"

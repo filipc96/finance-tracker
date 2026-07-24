@@ -1,10 +1,5 @@
-import Dashboard from "./pages/Dashboard";
 import { Route, Routes, BrowserRouter, Navigate } from "react-router-dom";
 import SharedLayout from "./layouts/SharedLayout";
-import MyAccount from "./pages/MyAccount";
-import Categories from "./pages/Categories";
-import Analytics from "./pages/Analytics";
-import History from "./pages/History";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import {
@@ -19,16 +14,26 @@ import {
   faArrowTrendUp,
   faPiggyBank,
 } from "@fortawesome/free-solid-svg-icons";
-import Budgets from "./pages/Budgets";
-import Stocks from "./pages/Stocks";
-import Savings from "./pages/Savings";
-import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { useEffect } from "react";
+import { lazy, useEffect } from "react";
 import { Toaster } from "react-hot-toast";
+
+// Route pages are lazy so each becomes its own chunk; the chart-heavy pages
+// (Dashboard/Analytics/Savings) pull chart.js only when actually visited.
+// Login/Register/NotFound stay eager — they render outside the Suspense
+// boundary and are the unauthenticated entry point.
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const MyAccount = lazy(() => import("./pages/MyAccount"));
+const Categories = lazy(() => import("./pages/Categories"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const History = lazy(() => import("./pages/History"));
+const Budgets = lazy(() => import("./pages/Budgets"));
+const Stocks = lazy(() => import("./pages/Stocks"));
+const Savings = lazy(() => import("./pages/Savings"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 const menuItems = [
   {

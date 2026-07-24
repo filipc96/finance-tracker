@@ -76,6 +76,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Only the two credential endpoints opt in (via ScopedRateThrottle +
+    # throttle_scope); everything else stays unthrottled. Login also unwraps the
+    # vault DEK, so an unthrottled /api/token/ is a brute-force path at the
+    # encryption itself. Keyed by client IP (requests are anonymous).
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "10/min",
+        "recover": "5/min",
+    },
 }
 
 SIMPLE_JWT = {

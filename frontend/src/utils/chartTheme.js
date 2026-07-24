@@ -1,6 +1,16 @@
 // Shared chart.js theming so every chart reacts to the dark-mode toggle
 // instead of reading document.documentElement on each render.
 
+import { Chart as ChartJS, registerables } from "chart.js";
+
+// Register every chart.js controller/element/scale once, app-wide. This lives
+// here (not in main.jsx) so chart.js stays out of the entry bundle: every chart
+// component and chart page imports this module, so the registration — and
+// chart.js itself — loads lazily with the first chart route. The generic
+// <Chart type="bar"> needs this; without it Analytics blanks with "bar is not a
+// registered controller" in a production build.
+ChartJS.register(...registerables);
+
 export const PIE_PALETTE = [
   "rgba(239, 68, 68, 0.8)", // red
   "rgba(34, 197, 94, 0.8)", // green
