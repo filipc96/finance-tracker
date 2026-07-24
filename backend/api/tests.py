@@ -189,6 +189,64 @@ class TransactionTests(APITestCase):
             )
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_update_amount_adjusts_balance(self):
+        tx = create_transaction(self.user, self.income, "100.00")
+        self.assertEqual(self.refresh_balance(), Decimal("100.00"))
+        resp = self.client.patch(
+            f"/api/transactions/update/{tx.id}", {"amount": "150.00"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.refresh_balance(), Decimal("150.00"))
+
+    def test_update_category_switches_balance_effect(self):
+        # Flip an expense into income: -40 backed out, +40 applied.
+        tx = create_transaction(self.user, self.expense, "40.00")
+        self.assertEqual(self.refresh_balance(), Decimal("-40.00"))
+        resp = self.client.patch(
+            f"/api/transactions/update/{tx.id}",
+            {"category": self.income.id, "type": "income"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.refresh_balance(), Decimal("40.00"))
+
+    def test_update_name_only_keeps_balance(self):
+        tx = create_transaction(self.user, self.income, "100.00")
+        resp = self.client.patch(
+            f"/api/transactions/update/{tx.id}", {"name": "renamed"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.refresh_balance(), Decimal("100.00"))
+        tx.refresh_from_db()
+        self.assertEqual(tx.name, "renamed")
+
+    def test_update_rejects_non_positive_amount(self):
+        tx = create_transaction(self.user, self.income, "100.00")
+        resp = self.client.patch(
+            f"/api/transactions/update/{tx.id}", {"amount": "0.00"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.refresh_balance(), Decimal("100.00"))
+
+    def test_update_cross_user_category_rejected(self):
+        tx = create_transaction(self.user, self.income, "100.00")
+        other_cat = Category.objects.create(
+            user=self.other, name="X", type="income"
+        )
+        resp = self.client.patch(
+            f"/api/transactions/update/{tx.id}", {"category": other_cat.id}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cross_user_update_404(self):
+        other_cat = Category.objects.create(
+            user=self.other, name="Other", type="expense"
+        )
+        tx = create_transaction(self.other, other_cat, "5.00")
+        resp = self.client.patch(
+            f"/api/transactions/update/{tx.id}", {"amount": "9.00"}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_latest_endpoints_user_scoped(self):
         other_cat = Category.objects.create(
             user=self.other, name="Other", type="expense"

@@ -1,4 +1,5 @@
 import AddTransaction from "../components/AddTransaction";
+import EditTransactionModal from "../components/EditTransactionModal";
 import RecurringManager from "../components/RecurringManager";
 import TransactionTable from "../components/TransactionsTable";
 import Button from "../components/ui/Button";
@@ -27,6 +28,7 @@ const History = () => {
   const [categories, setCategories] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const PAGE_SIZE = 20;
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
@@ -263,6 +265,7 @@ const History = () => {
           <TransactionTable
             transactions={transactions}
             onDelete={deleteTransaction}
+            onEdit={setEditing}
           />
           {count > PAGE_SIZE && (
             <div className="flex items-center justify-center space-x-4 py-4">
@@ -290,6 +293,14 @@ const History = () => {
         </div>{" "}
         <RecurringManager onMaterialized={() => getTransactions()} />
       </div>
+
+      {editing && (
+        <EditTransactionModal
+          transaction={editing}
+          onClose={() => setEditing(null)}
+          onUpdated={() => getTransactions()}
+        />
+      )}
     </>
   );
 };

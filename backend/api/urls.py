@@ -12,6 +12,11 @@ urlpatterns = [
         name="transaction-delete",
     ),
     path(
+        "transactions/update/<int:pk>",
+        views.TransactionUpdate.as_view(),
+        name="transaction-update",
+    ),
+    path(
         "transactions/expenses/latest",
         views.GetLatestExpense.as_view(),
         name="latest-expense",

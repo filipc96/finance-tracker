@@ -309,6 +309,20 @@ class TransactionDelete(generics.DestroyAPIView):
         return Transaction.objects.filter(user=user, id=self.kwargs["pk"])
 
 
+class TransactionUpdate(generics.UpdateAPIView):
+    """Edit a transaction (PATCH/PUT). Balance re-adjusts via the save signals.
+
+    Scoped to the requesting user; the serializer re-validates category
+    ownership and a positive amount, exactly as on create.
+    """
+
+    serializer_class = TransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Transaction.objects.filter(user=self.request.user)
+
+
 class CategoryListCreate(generics.ListCreateAPIView):
 
     serializer_class = CategorySerializer

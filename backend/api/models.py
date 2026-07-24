@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.dispatch import receiver
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import pre_save, post_save, post_delete
 
 from .fields import EncryptedCharField
 
@@ -300,22 +300,48 @@ class SavingsTransaction(models.Model):
         return f"{self.account.name}: {self.type} {self.amount}"
 
 
+def _balance_effect(transaction):
+    """Signed impact of a transaction on the account balance.
+
+    Balance is driven by the *category* type (income adds, expense subtracts),
+    matching how transactions are created.
+    """
+    if transaction.category.type == "income":
+        return transaction.amount
+    if transaction.category.type == "expense":
+        return -transaction.amount
+    return Decimal("0")
+
+
+@receiver(pre_save, sender=Transaction)
+def stash_old_balance_effect(sender, instance, **kwargs):
+    """Capture the pre-edit balance effect so post_save can apply the delta.
+
+    On create there's no prior row, so the old effect is zero and post_save
+    applies the full new effect (unchanged behavior). On edit we read the
+    committed row to know exactly what to back out.
+    """
+    if instance.pk:
+        old = Transaction.objects.filter(pk=instance.pk).first()
+        instance._old_balance_effect = _balance_effect(old) if old else Decimal("0")
+    else:
+        instance._old_balance_effect = Decimal("0")
+
+
 @receiver(post_save, sender=Transaction)
 def update_balance_post_save(sender, instance, created, **kwargs):
-    if created:
+    # Apply only the change (new effect minus what was there before), so edits
+    # to amount/category/type re-balance correctly and creates apply in full.
+    old_effect = getattr(instance, "_old_balance_effect", Decimal("0"))
+    delta = _balance_effect(instance) - old_effect
+    if delta:
         account = Account.objects.get(user=instance.user)
-        if instance.category.type == "income":
-            account.balance += instance.amount
-        elif instance.category.type == "expense":
-            account.balance -= instance.amount
+        account.balance += delta
         account.save()
 
 
 @receiver(post_delete, sender=Transaction)
 def update_balance_post_delete(sender, instance, **kwargs):
     account = Account.objects.get(user=instance.user)
-    if instance.category.type == "income":
-        account.balance -= instance.amount
-    elif instance.category.type == "expense":
-        account.balance += instance.amount
+    account.balance -= _balance_effect(instance)
     account.save()

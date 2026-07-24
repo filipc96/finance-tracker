@@ -1,8 +1,8 @@
-import { faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faTrash, faPen } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { formatAmount } from "../utils/formatCurrency";
 
-const TransactionTable = ({ transactions, onDelete }) => {
+const TransactionTable = ({ transactions, onDelete, onEdit }) => {
   return (
     <div className="relative overflow-x-auto shadow-md rounded-md border">
       <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
@@ -50,13 +50,24 @@ const TransactionTable = ({ transactions, onDelete }) => {
                 <td className="px-6 py-4">{transaction.category_name}</td>
 
                 <td className="px-6 py-4">
-                  <button
-                    onClick={() => onDelete(transaction.id)}
-                    className="rounded p-1.5 text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
-                    aria-label="Delete transaction"
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {onEdit && (
+                      <button
+                        onClick={() => onEdit(transaction)}
+                        className="rounded p-1.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 transition-colors"
+                        aria-label="Edit transaction"
+                      >
+                        <FontAwesomeIcon icon={faPen} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onDelete(transaction.id)}
+                      className="rounded p-1.5 text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-colors"
+                      aria-label="Delete transaction"
+                    >
+                      <FontAwesomeIcon icon={faTrash} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             );
