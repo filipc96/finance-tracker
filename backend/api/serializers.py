@@ -239,9 +239,21 @@ class SavingsTransactionSerializer(serializers.ModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(required=False, source="category.name")
+    # Display-only: the write path sets `category` (a PK). Keeping this writable
+    # let a dotted-source write leak into the nested category — a latent bug.
+    category_name = serializers.CharField(source="category.name", read_only=True)
 
     class Meta:
         model = Transaction
         fields = ["id", "date", "amount", "name", "category_name", "category", "type"]
         extra_kwargs = {"user": {"read_only": True}}
+
+    def validate_category(self, category):
+        if category.user != self.context["request"].user:
+            raise serializers.ValidationError("Category not found.")
+        return category
+
+    def validate_amount(self, amount):
+        if amount <= 0:
+            raise serializers.ValidationError("Amount must be positive.")
+        return amount

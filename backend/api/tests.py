@@ -142,6 +142,37 @@ class TransactionTests(APITestCase):
         response = self.client.delete(f"/api/transactions/delete/{tx.id}")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_cross_user_category_rejected(self):
+        other_cat = Category.objects.create(
+            user=self.other, name="Other", type="expense"
+        )
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "date": "2026-01-01",
+                "amount": "10.00",
+                "name": "x",
+                "category": other_cat.id,
+                "type": "expense",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.refresh_balance(), Decimal("0.00"))
+
+    def test_non_positive_amount_rejected(self):
+        for bad in ("0.00", "-5.00"):
+            response = self.client.post(
+                "/api/transactions/",
+                {
+                    "date": "2026-01-01",
+                    "amount": bad,
+                    "name": "x",
+                    "category": self.expense.id,
+                    "type": "expense",
+                },
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_latest_endpoints_user_scoped(self):
         other_cat = Category.objects.create(
             user=self.other, name="Other", type="expense"
