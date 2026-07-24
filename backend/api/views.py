@@ -7,6 +7,7 @@ from django.shortcuts import render
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.utils.dateparse import parse_date
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -256,8 +257,44 @@ class TransactionListCreate(generics.ListCreateAPIView):
     pagination_class = TransactionPagination
 
     def get_queryset(self):
-        user = self.request.user
-        return Transaction.objects.filter(user=user).order_by("-date", "-id")
+        """List the user's transactions, newest first, with optional filters.
+
+        Query params (all optional, combined with AND): search (name
+        substring), type (income|expense), category (id), date_from / date_to
+        (YYYY-MM-DD, inclusive), min_amount / max_amount. Unparsable values are
+        ignored rather than erroring so a malformed filter never 500s.
+        """
+        qs = Transaction.objects.filter(user=self.request.user)
+        p = self.request.query_params
+
+        search = p.get("search", "").strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+
+        tx_type = p.get("type", "").strip()
+        if tx_type in ("income", "expense"):
+            qs = qs.filter(type=tx_type)
+
+        category = p.get("category", "").strip()
+        if category.isdigit():
+            qs = qs.filter(category_id=int(category))
+
+        date_from = parse_date(p.get("date_from", "").strip())
+        if date_from:
+            qs = qs.filter(date__gte=date_from)
+        date_to = parse_date(p.get("date_to", "").strip())
+        if date_to:
+            qs = qs.filter(date__lte=date_to)
+
+        for key, lookup in (("min_amount", "amount__gte"), ("max_amount", "amount__lte")):
+            raw = p.get(key, "").strip()
+            if raw:
+                try:
+                    qs = qs.filter(**{lookup: Decimal(raw)})
+                except InvalidOperation:
+                    pass
+
+        return qs.order_by("-date", "-id")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

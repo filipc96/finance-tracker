@@ -201,6 +201,68 @@ class TransactionTests(APITestCase):
         self.assertEqual(response.data["name"], "mine")
 
 
+class TransactionFilterTests(APITestCase):
+    def setUp(self):
+        self.user = create_user("alice")
+        self.client.force_authenticate(self.user)
+        self.income = Category.objects.create(
+            user=self.user, name="Salary", type="income"
+        )
+        self.expense = Category.objects.create(
+            user=self.user, name="Food", type="expense"
+        )
+        create_transaction(
+            self.user, self.income, "1000.00", name="March salary", date="2026-03-01"
+        )
+        create_transaction(
+            self.user, self.expense, "12.50", name="Groceries", date="2026-03-05"
+        )
+        create_transaction(
+            self.user,
+            self.expense,
+            "80.00",
+            name="Restaurant dinner",
+            date="2026-02-20",
+        )
+
+    def _names(self, resp):
+        return sorted(r["name"] for r in resp.data["results"])
+
+    def test_search_by_name(self):
+        resp = self.client.get("/api/transactions/?search=din")
+        self.assertEqual(self._names(resp), ["Restaurant dinner"])
+
+    def test_filter_by_type(self):
+        resp = self.client.get("/api/transactions/?type=income")
+        self.assertEqual(self._names(resp), ["March salary"])
+
+    def test_filter_by_category(self):
+        resp = self.client.get(f"/api/transactions/?category={self.expense.id}")
+        self.assertEqual(self._names(resp), ["Groceries", "Restaurant dinner"])
+
+    def test_filter_by_date_range(self):
+        resp = self.client.get(
+            "/api/transactions/?date_from=2026-03-01&date_to=2026-03-31"
+        )
+        self.assertEqual(self._names(resp), ["Groceries", "March salary"])
+
+    def test_filter_by_amount_range(self):
+        resp = self.client.get("/api/transactions/?min_amount=50&max_amount=500")
+        self.assertEqual(self._names(resp), ["Restaurant dinner"])
+
+    def test_combined_filters(self):
+        resp = self.client.get("/api/transactions/?type=expense&min_amount=50")
+        self.assertEqual(self._names(resp), ["Restaurant dinner"])
+
+    def test_bad_filter_values_ignored(self):
+        # Garbage filter params must not 500 — they're ignored, list unchanged.
+        resp = self.client.get(
+            "/api/transactions/?category=abc&date_from=notadate&min_amount=xyz"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["count"], 3)
+
+
 class AggregateIsolationTests(APITestCase):
     def setUp(self):
         self.user = create_user("alice")

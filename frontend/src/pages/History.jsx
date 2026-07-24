@@ -2,9 +2,21 @@ import AddTransaction from "../components/AddTransaction";
 import RecurringManager from "../components/RecurringManager";
 import TransactionTable from "../components/TransactionsTable";
 import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
 import api from "../api";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
+
+const EMPTY_FILTERS = {
+  search: "",
+  type: "",
+  category: "",
+  date_from: "",
+  date_to: "",
+  min_amount: "",
+  max_amount: "",
+};
 
 const History = () => {
   const fileInputRef = useRef(null);
@@ -12,13 +24,21 @@ const History = () => {
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
   const [hasNext, setHasNext] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
 
   const PAGE_SIZE = 20;
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const getTransactions = (targetPage = page) => {
+  const getTransactions = (targetPage = page, activeFilters = filters) => {
+    const params = new URLSearchParams({ page: targetPage });
+    Object.entries(activeFilters).forEach(([key, value]) => {
+      if (value) params.append(key, value);
+    });
     api
-      .get(`/api/transactions/?page=${targetPage}`)
+      .get(`/api/transactions/?${params.toString()}`)
       .then((response) => {
         setTransactions(response.data.results);
         setCount(response.data.count);
@@ -28,11 +48,21 @@ const History = () => {
       .catch((error) => {
         if (error.response?.status === 404 && targetPage > 1) {
           // Page no longer exists (e.g. deleted last item on last page)
-          getTransactions(1);
+          getTransactions(1, activeFilters);
         } else {
           toast.error("Failed to load transactions.");
         }
       });
+  };
+
+  const setFilter = (key, value) =>
+    setFilters((prev) => ({ ...prev, [key]: value }));
+
+  const applyFilters = () => getTransactions(1, filters);
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    getTransactions(1, EMPTY_FILTERS);
   };
 
   const deleteTransaction = (id) => {
@@ -88,7 +118,13 @@ const History = () => {
 
   useEffect(() => {
     getTransactions(1);
+    api
+      .get("/api/categories/")
+      .then((res) => setCategories(res.data))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   return (
     <>
       <h2>History</h2>
@@ -105,6 +141,13 @@ const History = () => {
           ></AddTransaction>
         </div>
         <div className="w-full flex justify-end gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowFilters((s) => !s)}
+          >
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </Button>
           <Button variant="ghost" size="sm" onClick={exportCSV}>
             Export CSV
           </Button>
@@ -123,7 +166,100 @@ const History = () => {
             className="hidden"
           />
         </div>
+
+        {showFilters && (
+          <div className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                applyFilters();
+              }}
+              className="flex flex-col gap-4"
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Input
+                  label="Search"
+                  placeholder="Name contains…"
+                  value={filters.search}
+                  onChange={(e) => setFilter("search", e.target.value)}
+                />
+                <Select
+                  label="Type"
+                  value={filters.type}
+                  onChange={(e) => setFilter("type", e.target.value)}
+                >
+                  <option value="">All types</option>
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                </Select>
+                <Select
+                  label="Category"
+                  value={filters.category}
+                  onChange={(e) => setFilter("category", e.target.value)}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  label="From date"
+                  type="date"
+                  value={filters.date_from}
+                  onChange={(e) => setFilter("date_from", e.target.value)}
+                />
+                <Input
+                  label="To date"
+                  type="date"
+                  value={filters.date_to}
+                  onChange={(e) => setFilter("date_to", e.target.value)}
+                />
+                <Input
+                  label="Min amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={filters.min_amount}
+                  onChange={(e) => setFilter("min_amount", e.target.value)}
+                />
+                <Input
+                  label="Max amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={filters.max_amount}
+                  onChange={(e) => setFilter("max_amount", e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  disabled={activeFilterCount === 0}
+                >
+                  Clear
+                </Button>
+                <Button type="submit" variant="primary" size="sm">
+                  Apply
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
+
         <div className="w-full">
+          <div className="flex justify-between items-center pb-2 text-sm text-gray-600 dark:text-gray-300">
+            <span>
+              {count} transaction{count === 1 ? "" : "s"}
+              {activeFilterCount > 0 ? " (filtered)" : ""}
+            </span>
+          </div>
           <TransactionTable
             transactions={transactions}
             onDelete={deleteTransaction}
