@@ -7,12 +7,15 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 import { useEffect, useState } from "react";
 import { Line } from "react-chartjs-2";
 import api from "../api";
 import { useTheme } from "../contexts/ThemeContext";
-import { buildLineOptions } from "../utils/chartTheme";
+import { useCurrency } from "../contexts/CurrencyContext";
+import { buildLineOptions, CHART_COLORS, withAlpha } from "../utils/chartTheme";
+import ChartHeader from "./ui/ChartHeader";
 
 ChartJS.register(
   CategoryScale,
@@ -21,12 +24,29 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
-const Chart = ({ type }) => {
+const LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sept",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const Chart = ({ type, refreshKey, title }) => {
   const [sums, setSums] = useState({});
   const { darkMode } = useTheme();
+  const { displayCurrency, displayRate } = useCurrency();
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -35,51 +55,37 @@ const Chart = ({ type }) => {
       .get(`/api/transactions/monthly-sum/${type}/${currentYear}/`)
       .then((res) => setSums(res.data))
       .catch((error) => console.log(error));
-  }, []);
+  }, [type, refreshKey]);
 
-  const options = buildLineOptions(darkMode);
-
-  const labels = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sept",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-
-  const backgroundColor =
-    type === "expense" ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.2)";
-
-  const color =
-    type === "expense"
-      ? darkMode
-        ? "rgb(239, 68, 68)"
-        : "rgb(255, 99, 132)"
-      : darkMode
-      ? "rgb(34, 197, 94)"
-      : "rgb(99, 255, 132)";
+  const color = type === "expense" ? CHART_COLORS.expense : CHART_COLORS.income;
 
   const data = {
-    labels,
+    labels: LABELS,
     datasets: [
       {
-        label: `${type === "expense" ? "Expenses" : "Incomes"}`,
+        label: type === "expense" ? "Expenses" : "Income",
         data: sums,
         borderColor: color,
-        backgroundColor: backgroundColor,
+        backgroundColor: withAlpha(color, 0.15),
         fill: true,
       },
     ],
   };
 
-  return <Line options={options} data={data} />;
+  const options = buildLineOptions(darkMode, {
+    currency: displayCurrency,
+    rate: displayRate,
+    plugins: { legend: { display: false } },
+  });
+
+  return (
+    <>
+      {title && <ChartHeader title={title} />}
+      <div className="relative h-64">
+        <Line options={options} data={data} />
+      </div>
+    </>
+  );
 };
 
 export default Chart;

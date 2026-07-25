@@ -1,6 +1,7 @@
 import { Line } from "react-chartjs-2";
 import { useTheme } from "../contexts/ThemeContext";
-import { buildLineOptions } from "../utils/chartTheme";
+import { buildLineOptions, CHART_COLORS, withAlpha } from "../utils/chartTheme";
+import ChartHeader from "./ui/ChartHeader";
 
 const MONTH_LABELS = [
   "Jan",
@@ -31,21 +32,37 @@ const SavingsRateChart = ({ summary }) => {
     labels: MONTH_LABELS,
     datasets: [
       {
-        label: "Savings rate %",
+        label: "Savings rate",
         data: rates,
-        borderColor: "rgb(168, 85, 247)",
-        backgroundColor: "rgba(168, 85, 247, 0.2)",
+        borderColor: CHART_COLORS.savings,
+        backgroundColor: withAlpha(CHART_COLORS.savings, 0.15),
         fill: true,
-        tension: 0.3,
+        tension: 0.35,
         spanGaps: true,
       },
     ],
   };
 
+  // Single series: drop the legend (the title names it) and label the axis and
+  // tooltip as a percentage. Mutate after building so the themed grid/tick
+  // colors are kept (buildLineOptions replaces a scale wholesale if passed one).
+  const options = buildLineOptions(darkMode, {
+    plugins: { legend: { display: false } },
+  });
+  options.scales.y.ticks.callback = (v) => `${v}%`;
+  options.plugins.tooltip.callbacks = {
+    label: (ctx) => ` Savings rate: ${ctx.parsed.y}%`,
+  };
+
   return (
     <>
-      <span className="block mb-4">Savings Rate (income − expenses) / income</span>
-      <Line data={data} options={buildLineOptions(darkMode)} />
+      <ChartHeader
+        title="Savings rate"
+        subtitle="(income − expenses) ÷ income, per month"
+      />
+      <div className="relative h-80">
+        <Line data={data} options={options} />
+      </div>
     </>
   );
 };

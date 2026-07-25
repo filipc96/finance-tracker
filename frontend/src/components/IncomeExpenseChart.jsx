@@ -2,7 +2,13 @@ import { Chart as ChartJS, BarElement } from "chart.js";
 import { Chart } from "react-chartjs-2";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCurrency } from "../contexts/CurrencyContext";
-import { buildLineOptions } from "../utils/chartTheme";
+import {
+  buildLineOptions,
+  CHART_COLORS,
+  withAlpha,
+} from "../utils/chartTheme";
+import ChartHeader from "./ui/ChartHeader";
+import ChartSelect from "./ui/ChartSelect";
 
 ChartJS.register(BarElement);
 
@@ -32,21 +38,28 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
         type: "bar",
         label: "Income",
         data: summary?.income || [],
-        backgroundColor: "rgba(34, 197, 94, 0.8)",
+        backgroundColor: withAlpha(CHART_COLORS.income, 0.85),
+        borderRadius: 4,
+        borderSkipped: false,
       },
       {
         type: "bar",
         label: "Expense",
         data: summary?.expense || [],
-        backgroundColor: "rgba(239, 68, 68, 0.8)",
+        backgroundColor: withAlpha(CHART_COLORS.expense, 0.85),
+        borderRadius: 4,
+        borderSkipped: false,
       },
       {
         type: "line",
         label: "Net",
         data: summary?.net || [],
-        borderColor: "rgb(59, 130, 246)",
-        backgroundColor: "rgba(59, 130, 246, 0.2)",
-        tension: 0.3,
+        borderColor: CHART_COLORS.net,
+        backgroundColor: withAlpha(CHART_COLORS.net, 0.12),
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        tension: 0.35,
       },
     ],
   };
@@ -56,28 +69,28 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <span>Income vs Expenses</span>
-        <select
+      <ChartHeader title="Income vs expenses">
+        <ChartSelect
           value={year}
           onChange={(e) => onYearChange(Number(e.target.value))}
-          className="px-3 py-1 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 text-sm"
         >
           {years.map((y) => (
             <option key={y} value={y}>
               {y}
             </option>
           ))}
-        </select>
+        </ChartSelect>
+      </ChartHeader>
+      <div className="relative h-80">
+        <Chart
+          type="bar"
+          data={data}
+          options={buildLineOptions(darkMode, {
+            currency: displayCurrency,
+            rate: displayRate,
+          })}
+        />
       </div>
-      <Chart
-        type="bar"
-        data={data}
-        options={buildLineOptions(darkMode, {
-          currency: displayCurrency,
-          rate: displayRate,
-        })}
-      />
     </>
   );
 };

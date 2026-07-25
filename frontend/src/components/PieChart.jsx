@@ -1,4 +1,3 @@
-import React from "react";
 import { useState, useEffect } from "react";
 import api from "../api";
 import { Pie } from "react-chartjs-2";
@@ -12,58 +11,65 @@ import {
   Legend,
 } from "chart.js";
 import { useTheme } from "../contexts/ThemeContext";
-import { getChartTheme, PIE_PALETTE } from "../utils/chartTheme";
+import { useCurrency } from "../contexts/CurrencyContext";
+import { buildPieOptions, getChartTheme, PIE_PALETTE } from "../utils/chartTheme";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
-);
+ChartJS.register(CategoryScale, LinearScale, ArcElement, Title, Tooltip, Legend);
 
 const PieChart = ({ type }) => {
   const [categories, setCategories] = useState([]);
   const { darkMode } = useTheme();
-  const { textColor, pieBorderColor } = getChartTheme(darkMode);
+  const { displayCurrency, displayRate } = useCurrency();
+  const { pieBorderColor } = getChartTheme(darkMode);
 
   useEffect(() => {
     api
       .get("/api/categories/")
       .then((res) => {
-        setCategories(res.data.filter((category) => category.type == type));
+        setCategories(
+          res.data.filter(
+            (category) =>
+              category.type == type && Number(category.transactions_sum) > 0
+          )
+        );
       })
       .catch((error) => console.log(error));
-  }, []);
+  }, [type]);
 
-  const labels = categories.map((item) => item.name);
-  const values = categories.map((item) => item.transactions_sum);
+  if (categories.length === 0) {
+    return (
+      <div className="flex h-72 items-center justify-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No {type} categories with activity yet.
+        </p>
+      </div>
+    );
+  }
 
   const data = {
-    labels: labels,
+    labels: categories.map((item) => item.name),
     datasets: [
       {
-        label: "Sums by Category",
-        data: values,
+        label: "Sums by category",
+        data: categories.map((item) => item.transactions_sum),
         backgroundColor: PIE_PALETTE,
         borderColor: pieBorderColor,
         borderWidth: 2,
+        hoverOffset: 6,
       },
     ],
   };
 
-  const options = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top",
-        labels: { color: textColor },
-      },
-    },
-  };
+  const options = buildPieOptions(darkMode, {
+    currency: displayCurrency,
+    rate: displayRate,
+  });
 
-  return <Pie data={data} options={options} />;
+  return (
+    <div className="relative h-72">
+      <Pie data={data} options={options} />
+    </div>
+  );
 };
 
 export default PieChart;

@@ -334,7 +334,9 @@ const Savings = () => {
             <h3 className="font-semibold mb-4">
               {selected.name} — balance over time
             </h3>
-            <Line data={chartData} options={buildLineOptions(darkMode)} />
+            <div className="relative h-72">
+              <Line data={chartData} options={buildLineOptions(darkMode)} />
+            </div>
           </div>
         )}
       </div>

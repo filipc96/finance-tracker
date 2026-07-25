@@ -12,7 +12,10 @@ import {
 } from "chart.js";
 import api from "../api";
 import { useTheme } from "../contexts/ThemeContext";
-import { buildLineOptions } from "../utils/chartTheme";
+import { useCurrency } from "../contexts/CurrencyContext";
+import { buildLineOptions, CHART_COLORS, withAlpha } from "../utils/chartTheme";
+import ChartHeader from "./ui/ChartHeader";
+import ChartSelect from "./ui/ChartSelect";
 
 ChartJS.register(
   CategoryScale,
@@ -26,6 +29,7 @@ ChartJS.register(
 
 const Graph = () => {
   const { darkMode } = useTheme();
+  const { displayCurrency, displayRate } = useCurrency();
   const [timespan, setTimespan] = useState(6);
   const [transactionTypes, setTransactionTypes] = useState(["expense"]);
   const [data, setData] = useState({});
@@ -82,63 +86,51 @@ const Graph = () => {
         const entry = data[type]?.find((item) => item.month === label);
         return entry ? entry.total : 0;
       }),
-      borderColor: type === "expense" ? "rgb(239, 68, 68)" : "rgb(34, 197, 94)",
-      backgroundColor:
-        type === "expense"
-          ? "rgba(239, 68, 68, 0.2)"
-          : "rgba(34, 197, 94, 0.2)",
-      tension: 0.4,
+      borderColor:
+        type === "expense" ? CHART_COLORS.expense : CHART_COLORS.income,
+      backgroundColor: withAlpha(
+        type === "expense" ? CHART_COLORS.expense : CHART_COLORS.income,
+        0.15
+      ),
+      tension: 0.35,
       fill: true,
     })),
   };
 
-  const options = buildLineOptions(darkMode);
+  const options = buildLineOptions(darkMode, {
+    currency: displayCurrency,
+    rate: displayRate,
+  });
   options.scales.y.beginAtZero = true;
 
   return (
-    <div className="flex flex-col rounded-md w-full">
-      <div className="flex items-center gap-5 mb-6">
-        <div className="relative">
-          <select
-            value={timespan}
-            onChange={handleTimespanChange}
-            className="appearance-none px-4 py-3 pr-10 rounded-lg border-2 border-gray-200 bg-gray-50 text-sm min-w-[180px] text-gray-700 cursor-pointer hover:border-blue-500 hover:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-          >
-            <option value="" disabled>
-              Select Timespan
-            </option>
-            <option value={6}>Last 6 Months</option>
-            <option value={12}>Last 12 Months</option>
-            <option value={24}>Last 24 Months</option>
-          </select>
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-xs text-gray-600">
-            ▼
-          </span>
-        </div>
+    <>
+      <ChartHeader title="Transactions over time">
+        <ChartSelect
+          value={transactionTypes.length > 1 ? "all" : transactionTypes[0]}
+          onChange={handleTypeChange}
+        >
+          <option value="all">All transactions</option>
+          <option value="expense">Expenses</option>
+          <option value="income">Income</option>
+        </ChartSelect>
+        <ChartSelect value={timespan} onChange={handleTimespanChange}>
+          <option value={6}>Last 6 months</option>
+          <option value={12}>Last 12 months</option>
+          <option value={24}>Last 24 months</option>
+        </ChartSelect>
+      </ChartHeader>
 
-        <div className="relative">
-          <select
-            value={transactionTypes}
-            onChange={handleTypeChange}
-            className="appearance-none px-4 py-3 pr-10 rounded-lg border-2 border-gray-200 bg-gray-50 text-sm min-w-[180px] text-gray-700 cursor-pointer hover:border-blue-500 hover:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-          >
-            <option value="all">All transactions</option>
-            <option value="expense">Expenses</option>
-            <option value="income">Income</option>
-          </select>
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-xs text-gray-600">
-            ▼
-          </span>
+      {loading && Object.keys(data).length === 0 ? (
+        <div className="flex h-96 items-center justify-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
         </div>
-      </div>
-
-      <div className="w-full min-h-[500px] relative">
-        <Line
-          data={chartData}
-          options={{ ...options, maintainAspectRatio: false }}
-        />
-      </div>
-    </div>
+      ) : (
+        <div className="relative h-96">
+          <Line data={chartData} options={options} />
+        </div>
+      )}
+    </>
   );
 };
 

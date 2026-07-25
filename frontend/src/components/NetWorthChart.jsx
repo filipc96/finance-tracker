@@ -13,7 +13,13 @@ import {
 import api from "../api";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCurrency } from "../contexts/CurrencyContext";
-import { buildLineOptions } from "../utils/chartTheme";
+import {
+  buildLineOptions,
+  CHART_COLORS,
+  withAlpha,
+} from "../utils/chartTheme";
+import ChartHeader from "./ui/ChartHeader";
+import ChartSelect from "./ui/ChartSelect";
 
 ChartJS.register(
   CategoryScale,
@@ -44,60 +50,56 @@ const NetWorthChart = () => {
       {
         label: "Net worth",
         data: series.map((s) => s.net_worth),
-        borderColor: "rgb(59, 130, 246)",
-        backgroundColor: "rgba(59, 130, 246, 0.2)",
+        borderColor: CHART_COLORS.netWorth,
+        backgroundColor: withAlpha(CHART_COLORS.netWorth, 0.12),
         fill: true,
-        tension: 0.3,
         borderWidth: 3,
       },
       {
         label: "Balance",
         data: series.map((s) => s.account_balance),
-        borderColor: "rgb(34, 197, 94)",
-        tension: 0.3,
+        borderColor: CHART_COLORS.balance,
       },
       {
         label: "Savings",
         data: series.map((s) => s.savings_total),
-        borderColor: "rgb(168, 85, 247)",
-        tension: 0.3,
+        borderColor: CHART_COLORS.savings,
       },
       {
         label: "Stocks",
         data: series.map((s) => s.portfolio_value),
-        borderColor: "rgb(251, 146, 60)",
-        tension: 0.3,
+        borderColor: CHART_COLORS.stocks,
       },
     ],
   };
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <span>Net Worth Over Time</span>
-        <select
+      <ChartHeader title="Net worth over time">
+        <ChartSelect
           value={months}
           onChange={(e) => setMonths(Number(e.target.value))}
-          className="px-3 py-1 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 text-sm"
         >
           <option value={6}>Last 6 months</option>
           <option value={12}>Last 12 months</option>
           <option value={24}>Last 24 months</option>
-        </select>
-      </div>
+        </ChartSelect>
+      </ChartHeader>
       {series.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
           No snapshots yet — net worth data accrues from your first app load
           each day.
         </p>
       ) : (
-        <Line
-          data={data}
-          options={buildLineOptions(darkMode, {
-            currency: displayCurrency,
-            rate: displayRate,
-          })}
-        />
+        <div className="relative h-80">
+          <Line
+            data={data}
+            options={buildLineOptions(darkMode, {
+              currency: displayCurrency,
+              rate: displayRate,
+            })}
+          />
+        </div>
       )}
     </>
   );

@@ -26,8 +26,12 @@ const Dashboard = () => {
   const [latestExpense, setLatestExpense] = useState(null);
   const [latestIncome, setLatestIncome] = useState(null);
   const [allTimeSpent, setAllTimeSpent] = useState(0);
+  // Bumped on every getData() run so the charts and budget widget (which fetch
+  // their own data) refetch whenever a transaction is added/updated.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const getData = async () => {
+    setRefreshKey((k) => k + 1);
     try {
       const userData = await api.get("/api/user/");
       setUsername(userData.data.username);
@@ -85,7 +89,6 @@ const Dashboard = () => {
           icon={faScaleBalanced}
           label="Net Worth"
           value={formatWhole(netWorth, displayCurrency, displayRate)}
-          subtext="Balance + savings + stocks"
         />
         <StatCard
           icon={faWallet}
@@ -133,21 +136,27 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 gap-6 pb-6 lg:grid-cols-5 lg:gap-x-4">
         <div className="flex flex-col gap-6 lg:col-span-3">
           <Card>
-            <div className="mb-4">Expenses this year</div>
             <ChartErrorBoundary>
-              <Chart type="expense" />
+              <Chart
+                type="expense"
+                title="Expenses this year"
+                refreshKey={refreshKey}
+              />
             </ChartErrorBoundary>
           </Card>
           <Card>
-            <div className="mb-4">Income this year</div>
             <ChartErrorBoundary>
-              <Chart type="income" />
+              <Chart
+                type="income"
+                title="Income this year"
+                refreshKey={refreshKey}
+              />
             </ChartErrorBoundary>
           </Card>
         </div>
 
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <BudgetAlerts />
+          <BudgetAlerts refreshKey={refreshKey} />
           <ScanReceipt callback={getData} className="" />
           <AddTransaction callback={getData} type="expense" className="" />
           <AddTransaction callback={getData} type="income" className="" />
