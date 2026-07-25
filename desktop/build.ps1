@@ -5,9 +5,10 @@
 .DESCRIPTION
     Runs the full packaging pipeline:
       1. Build the React SPA            -> frontend/dist
-      2. PyInstaller the Django sidecar -> backend/dist/fintrax-server.exe
-      3. Copy the sidecar with the Rust host-triple suffix into src-tauri/binaries
-      4. cargo tauri build              -> NSIS installer in src-tauri/target/release/bundle/nsis
+      2. Mirror frontend/dist           -> src-tauri/ui (what Tauri bundles from)
+      3. PyInstaller the Django sidecar -> backend/dist/fintrax-server.exe
+      4. Copy the sidecar with the Rust host-triple suffix into src-tauri/binaries
+      5. cargo tauri build              -> NSIS installer in src-tauri/target/release/bundle/nsis
 
     Run from anywhere; paths are resolved relative to the repo root.
     Requires: Node/npm, the backend venv with requirements-desktop.txt installed,
@@ -38,6 +39,19 @@ if (-not $SkipFrontend) {
     if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
     Pop-Location
 }
+
+# 1b. Sync the built SPA into the dir Tauri bundles from ------------------
+# tauri.conf.json's frontendDist is ./ui, but the SPA builds to frontend/dist.
+# Without this mirror the packaged app silently ships a stale UI. /MIR makes
+# src-tauri/ui an exact copy of the fresh build. This runs even with
+# -SkipFrontend so ui always tracks the current dist. robocopy exit codes < 8
+# mean success, so guard on >= 8 and then clear $LASTEXITCODE for later checks.
+Step "Syncing SPA into src-tauri/ui"
+$Ui = Join-Path $SrcTauri "ui"
+robocopy "$Frontend\dist" $Ui /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "robocopy dist -> ui failed with code $LASTEXITCODE" }
+Write-Host "  -> $Ui (robocopy code $LASTEXITCODE)"
+$global:LASTEXITCODE = 0
 
 # 2. Sidecar --------------------------------------------------------------
 if (-not $SkipSidecar) {
