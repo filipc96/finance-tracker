@@ -714,6 +714,92 @@ class NetWorthSeries(APIView):
         )
 
 
+class PeriodSummary(APIView):
+    """Income, expenses, savings rate and net-worth change over a rolling window.
+
+    Backs the single period filter on the Analytics page: one call returns every
+    period-windowed card, so changing the filter updates them together. Income and
+    expenses are summed straight from the transactions inside the window — an old
+    one-off opening-balance entry naturally falls outside any recent period, so the
+    savings rate reflects only money actually earned and spent in that window.
+    Net-worth change is the delta of each net-worth component (balance, savings,
+    stocks) between the window's opening snapshot and the latest one.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # Rolling-window length in days for each selectable period.
+    PERIOD_DAYS = {
+        "day": 1,
+        "week": 7,
+        "month": 30,
+        "3m": 90,
+        "6m": 182,
+        "year": 365,
+        "5y": 1825,
+    }
+
+    def get(self, request):
+        period = request.query_params.get("period", "6m")
+        days = self.PERIOD_DAYS.get(period)
+        if days is None:
+            period, days = "6m", self.PERIOD_DAYS["6m"]
+
+        today = datetime.now().date()
+        start = today - timedelta(days=days)
+
+        def total(kind):
+            return Transaction.objects.filter(
+                user=request.user, type=kind, date__gte=start, date__lte=today
+            ).aggregate(s=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["s"]
+
+        income = total("income")
+        expense = total("expense")
+        savings_rate = (
+            round((income - expense) / income * 100, 1) if income > 0 else None
+        )
+
+        return Response(
+            {
+                "period": period,
+                "window": {"start": start, "end": today},
+                "income": income,
+                "expense": expense,
+                "savings_rate": savings_rate,
+                "net_worth_change": self._net_worth_change(
+                    request.user, start
+                ),
+            }
+        )
+
+    def _net_worth_change(self, user, start):
+        """Delta of each net-worth component since the window opened.
+
+        Baseline = the newest snapshot on or before the window start (the value
+        as the window opened). If the user has no history reaching that far back,
+        fall back to their earliest snapshot and flag it so the UI can label the
+        change "since first record" rather than imply the full period.
+        """
+        snaps = NetWorthSnapshot.objects.filter(user=user)
+        latest = snaps.order_by("-date").first()
+        if latest is None:
+            return {"available": False}
+
+        baseline = snaps.filter(date__lte=start).order_by("-date").first()
+        since_first_record = baseline is None
+        if baseline is None:
+            baseline = snaps.order_by("date").first()
+
+        return {
+            "available": True,
+            "since_first_record": since_first_record,
+            "balance": latest.account_balance - baseline.account_balance,
+            "savings": latest.savings_total - baseline.savings_total,
+            "stocks": latest.portfolio_value - baseline.portfolio_value,
+            "total": latest.net_worth - baseline.net_worth,
+        }
+
+
 class MonthlySummary(APIView):
     permission_classes = [IsAuthenticated]
 

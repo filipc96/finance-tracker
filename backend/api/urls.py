@@ -113,6 +113,11 @@ urlpatterns = [
         name="monthly-summary",
     ),
     path(
+        "analytics/period-summary/",
+        views.PeriodSummary.as_view(),
+        name="period-summary",
+    ),
+    path(
         "analytics/category-trends/<str:transaction_type>/<int:months>/",
         views.CategoryTrends.as_view(),
         name="category-trends",
