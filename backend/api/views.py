@@ -347,6 +347,10 @@ class TransactionListCreate(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+        # Balance signals have already fired; record today's net-worth snapshot
+        # so the dashboard's Net Worth card reflects the new transaction without
+        # waiting for the next /api/process/ run.
+        upsert_net_worth_snapshot(self.request.user)
 
 
 class TransactionDelete(generics.DestroyAPIView):
@@ -356,6 +360,12 @@ class TransactionDelete(generics.DestroyAPIView):
     def get_queryset(self):
         user = self.request.user
         return Transaction.objects.filter(user=user, id=self.kwargs["pk"])
+
+    def perform_destroy(self, instance):
+        user = instance.user
+        super().perform_destroy(instance)
+        # Keep today's net-worth snapshot in step with the reverted balance.
+        upsert_net_worth_snapshot(user)
 
 
 class TransactionUpdate(generics.UpdateAPIView):
@@ -370,6 +380,11 @@ class TransactionUpdate(generics.UpdateAPIView):
 
     def get_queryset(self):
         return Transaction.objects.filter(user=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save()
+        # Re-record today's net-worth snapshot from the re-adjusted balance.
+        upsert_net_worth_snapshot(self.request.user)
 
 
 class CategoryListCreate(generics.ListCreateAPIView):
@@ -1122,8 +1137,24 @@ class ProcessOnLoad(APIView):
         )
 
 
+def _pos_value(p):
+    """Parse a portfolio position's stored `value` (a string) to Decimal."""
+    try:
+        return Decimal(str(p.get("value") or "0"))
+    except (InvalidOperation, TypeError):
+        return Decimal("0")
+
+
 def build_financial_context(user):
-    """Plain-text summary of the user's finances for the chat system prompt."""
+    """Plain-text summary of the user's finances for the chat system prompt.
+
+    Feeds every section the chat can reason over: balances, net worth, savings,
+    stock portfolio, this month's budgets, rolling-window analytics, per-category
+    sums, and the most recent transactions. Each optional block is guarded so it
+    is simply omitted when the user has no such data.
+    """
+    settings = user.settings
+    base = settings.base_currency or BASE_CURRENCY
     balance = user.account.balance
     today = datetime.now().date()
 
@@ -1151,20 +1182,125 @@ def build_financial_context(user):
         .annotate(total=Sum("amount"))
     }
 
-    return "\n".join(
-        [
-            f"Today's date: {today}",
-            f"Account balance: {balance}",
-            f"All-time income: {totals.get('income', Decimal('0.00'))}",
-            f"All-time expenses: {totals.get('expense', Decimal('0.00'))}",
+    sections = [
+        f"Today's date: {today}",
+        f"Base currency (all amounts in this unless noted): {base}",
+        f"Account balance: {balance} {base}",
+        f"All-time income: {totals.get('income', Decimal('0.00'))} {base}",
+        f"All-time expenses: {totals.get('expense', Decimal('0.00'))} {base}",
+    ]
+
+    # Net worth — latest daily snapshot (balance + savings + stocks).
+    nw = NetWorthSnapshot.objects.filter(user=user).order_by("-date").first()
+    if nw is not None:
+        sections += [
             "",
-            "Sums by category:",
-            *(category_lines or ["- (no categories yet)"]),
-            "",
-            "Most recent transactions (date | type | category | name | amount):",
-            *(recent_lines or ["- (no transactions yet)"]),
+            f"Net worth (as of {nw.date}): {nw.net_worth} {base}",
+            f"- Account balance: {nw.account_balance} {base}",
+            f"- Savings total: {nw.savings_total} {base}",
+            f"- Portfolio value: {nw.portfolio_value} {base}",
         ]
+
+    # Savings accounts (active only).
+    savings = list(
+        SavingsAccount.objects.filter(user=user, active=True).order_by(
+            "-balance"
+        )
     )
+    if savings:
+        savings_total = sum((s.balance for s in savings), Decimal("0.00"))
+        sections += ["", f"Savings accounts (total {savings_total} {base}):"]
+        sections += [
+            f"- {s.name}: {s.balance} {base} @ {s.apy_rate}% APY"
+            for s in savings
+        ]
+
+    # Stock portfolio — latest snapshot + top holdings.
+    ps = PortfolioSnapshot.objects.filter(user=user).order_by("-date").first()
+    if ps is not None:
+        value = ps.base_value if ps.base_value is not None else ps.total_value
+        native = ps.currency or base
+        sections += [
+            "",
+            f"Stock portfolio (as of {ps.date}): {value} {base}",
+            f"- Cash: {ps.cash} {native}",
+            f"- Invested: {ps.invested} {native}",
+            f"- Unrealized P/L: {ps.unrealized_pl} {native}",
+        ]
+        holdings = sorted(
+            ps.positions or [], key=_pos_value, reverse=True
+        )[:8]
+        if holdings:
+            sections.append(
+                f"Top holdings (ticker | value {native} | unrealized P/L):"
+            )
+            sections += [
+                f"- {p.get('ticker') or p.get('name') or '?'} | "
+                f"{p.get('value')} | {p.get('unrealized_pl')}"
+                for p in holdings
+            ]
+
+    # Budgets for the current month — limit vs spent (mirrors BudgetListCreate).
+    month = today.replace(day=1)
+    b_start, b_end = budget_month_bounds(month)
+    budgets = (
+        Budget.objects.filter(user=user, month=month)
+        .select_related("category")
+        .annotate(
+            spent=Coalesce(
+                Sum(
+                    "category__transaction__amount",
+                    filter=Q(
+                        category__transaction__user=user,
+                        category__transaction__date__gte=b_start,
+                        category__transaction__date__lt=b_end,
+                    ),
+                ),
+                Value(Decimal("0.00")),
+            )
+        )
+    )
+    budget_lines = [
+        f"- {b.category.name}: spent {b.spent} of {b.amount} {base}"
+        for b in budgets
+    ]
+    if budget_lines:
+        sections += ["", f"Budgets ({month:%B %Y}):", *budget_lines]
+
+    # Analytics — income/expenses/savings-rate over rolling windows (same
+    # windows and math as the Analytics page's PeriodSummary).
+    def window_total(kind, days):
+        w_start = today - timedelta(days=days)
+        return Transaction.objects.filter(
+            user=user, type=kind, date__gte=w_start, date__lte=today
+        ).aggregate(s=Coalesce(Sum("amount"), Value(Decimal("0.00"))))["s"]
+
+    analytics_lines = []
+    for label, days in (("month", 30), ("3m", 90), ("6m", 182), ("year", 365)):
+        inc = window_total("income", days)
+        exp = window_total("expense", days)
+        rate = round((inc - exp) / inc * 100, 1) if inc > 0 else None
+        rate_str = f"{rate}%" if rate is not None else "n/a"
+        analytics_lines.append(
+            f"- last {label}: income {inc}, expenses {exp}, "
+            f"savings rate {rate_str}"
+        )
+    sections += [
+        "",
+        f"Analytics (rolling windows, amounts in {base}):",
+        *analytics_lines,
+    ]
+
+    sections += [
+        "",
+        "Sums by category:",
+        *(category_lines or ["- (no categories yet)"]),
+        "",
+        "Most recent transactions (date | type | category | name | amount):",
+        *(recent_lines or ["- (no transactions yet)"]),
+    ]
+
+    return "\n".join(sections)
 
 
 class ChatView(APIView):
