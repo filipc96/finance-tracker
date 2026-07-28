@@ -3,7 +3,8 @@ from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import override_settings
+from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -23,7 +24,10 @@ from .models import (
     Settings,
     Transaction,
 )
+from .llm import LLMConfigError
 from .t212 import T212AuthError, T212RateLimited
+from .telegram_bot import is_allowed
+from .telegram_commands import dispatch
 
 
 def create_user(username="alice", password="test-pass-123"):
@@ -2375,3 +2379,331 @@ class VaultApiTests(APITestCase):
             )
         finally:
             vault.clear_current_dek()
+
+
+class TelegramCommandTests(TestCase):
+    """The Telegram bot's server-side command handlers (no network)."""
+
+    def setUp(self):
+        # A fresh user gets Settings (USD base) + the seeded default categories
+        # via post_save signals, so the command handlers have data to act on.
+        self.user = create_user("carol")
+
+    def _tx_count(self):
+        return Transaction.objects.filter(user=self.user).count()
+
+    def test_add_expense_creates_transaction(self):
+        reply = dispatch(self.user, "add expense Groceries 12.5 coffee beans")
+        self.assertEqual(self._tx_count(), 1)
+        tx = Transaction.objects.get(user=self.user)
+        self.assertEqual(tx.amount, Decimal("12.50"))
+        self.assertEqual(tx.type, "expense")
+        self.assertEqual(tx.category.name, "Groceries")
+        self.assertEqual(tx.name, "coffee beans")
+        self.assertIn("Added expense", reply)
+
+    def test_add_defaults_name_to_category(self):
+        dispatch(self.user, "add income Salary 2000")
+        tx = Transaction.objects.get(user=self.user)
+        self.assertEqual(tx.name, "Salary")
+        self.assertEqual(tx.amount, Decimal("2000.00"))
+
+    def test_add_multiword_category(self):
+        reply = dispatch(self.user, "add expense Dining Out 20")
+        self.assertEqual(self._tx_count(), 1)
+        self.assertEqual(
+            Transaction.objects.get(user=self.user).category.name, "Dining Out"
+        )
+        self.assertIn("Dining Out", reply)
+
+    def test_add_case_insensitive_category(self):
+        dispatch(self.user, "add expense groceries 5")
+        self.assertEqual(
+            Transaction.objects.get(user=self.user).category.name, "Groceries"
+        )
+
+    def test_add_unknown_category_lists_options(self):
+        reply = dispatch(self.user, "add expense NoSuchCat 5")
+        self.assertEqual(self._tx_count(), 0)
+        self.assertIn("not found", reply)
+        self.assertIn("Groceries", reply)  # available expense categories listed
+
+    def test_add_non_positive_amount_rejected(self):
+        reply = dispatch(self.user, "add expense Groceries -3")
+        self.assertEqual(self._tx_count(), 0)
+        self.assertIn("Usage", reply)
+
+    def test_add_invalid_type_rejected(self):
+        reply = dispatch(self.user, "add foo Groceries 5")
+        self.assertEqual(self._tx_count(), 0)
+        self.assertIn("Invalid type", reply)
+
+    def test_add_missing_args_shows_usage(self):
+        reply = dispatch(self.user, "add expense")
+        self.assertEqual(self._tx_count(), 0)
+        self.assertIn("Usage", reply)
+
+    def test_balance_reports_net_income_expense(self):
+        cat_income = Category.objects.get(user=self.user, name="Salary")
+        cat_expense = Category.objects.get(user=self.user, name="Groceries")
+        create_transaction(self.user, cat_income, "100.00")
+        create_transaction(self.user, cat_expense, "40.00")
+        reply = dispatch(self.user, "balance")
+        self.assertIn("60.00 USD", reply)   # net
+        self.assertIn("100.00 USD", reply)  # income
+        self.assertIn("40.00 USD", reply)   # expense
+
+    def test_balance_zero_when_empty(self):
+        reply = dispatch(self.user, "balance")
+        self.assertIn("0.00 USD", reply)
+
+    def test_recent_returns_newest_first_capped(self):
+        cat = Category.objects.get(user=self.user, name="Groceries")
+        create_transaction(self.user, cat, "1.00", date="2026-01-01", name="a")
+        create_transaction(self.user, cat, "2.00", date="2026-02-01", name="b")
+        create_transaction(self.user, cat, "3.00", date="2026-03-01", name="c")
+        reply = dispatch(self.user, "recent 2")
+        lines = reply.splitlines()
+        # header + 2 rows
+        self.assertEqual(len(lines), 3)
+        self.assertIn("c", lines[1])  # newest first
+        self.assertIn("b", lines[2])
+
+    def test_recent_empty(self):
+        self.assertIn("No transactions", dispatch(self.user, "recent"))
+
+    def test_categories_lists_seeded_names(self):
+        reply = dispatch(self.user, "categories")
+        self.assertIn("Groceries", reply)
+        self.assertIn("Salary", reply)
+
+    def test_help_lists_commands(self):
+        reply = dispatch(self.user, "help")
+        self.assertIn("add", reply)
+        self.assertIn("balance", reply)
+
+    def test_unknown_command(self):
+        self.assertIn("Command not found", dispatch(self.user, "wat is this"))
+
+    def test_leading_slash_tolerated(self):
+        self.assertIn("Fintrax bot", dispatch(self.user, "/help"))
+
+    def test_transactions_are_user_scoped(self):
+        # Adding for carol must not surface bob's rows in balance/recent.
+        other = create_user("dave")
+        cat = Category.objects.get(user=other, name="Groceries")
+        create_transaction(other, cat, "999.00")
+        self.assertIn("0.00 USD", dispatch(self.user, "balance"))
+
+
+class TelegramAllowlistTests(TestCase):
+    """The numeric-id allowlist gate used by the poll supervisor."""
+
+    def test_matching_id_allowed(self):
+        self.assertTrue(is_allowed(12345, "12345"))
+        self.assertTrue(is_allowed("12345", "12345"))
+
+    def test_mismatched_id_rejected(self):
+        self.assertFalse(is_allowed(999, "12345"))
+
+    def test_blank_allowlist_rejects_everyone(self):
+        self.assertFalse(is_allowed(12345, ""))
+        self.assertFalse(is_allowed(12345, "   "))
+        self.assertFalse(is_allowed(12345, None))
+
+
+class TelegramSettingsRoundTripTests(APITestCase):
+    """The three telegram fields persist through the Settings API as plaintext."""
+
+    def setUp(self):
+        self.user = create_user("erin")
+        self.client.force_authenticate(self.user)
+
+    def test_post_then_get_round_trips_fields(self):
+        resp = self.client.post(
+            "/api/settings/",
+            {
+                "telegram_enabled": True,
+                "telegram_bot_token": "123:ABC",
+                "telegram_allowed_user_id": "42",
+            },
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        get = self.client.get("/api/settings/")
+        self.assertEqual(get.data["telegram_enabled"], True)
+        # Unlike the API-key secrets, the token is plaintext and echoed back.
+        self.assertEqual(get.data["telegram_bot_token"], "123:ABC")
+        self.assertEqual(get.data["telegram_allowed_user_id"], "42")
+
+
+class TelegramReceiptTests(TestCase):
+    """Receipt photo staging + /yes /no confirmation (no network, no live LLM)."""
+
+    def setUp(self):
+        self.user = create_user("dave")
+        # A chat LLM key so resolve_llm succeeds inside stage_receipt.
+        self.user.settings.open_ai_api_key = "sk-test"
+        self.user.settings.save()
+        # Isolate the module-level pending store between tests.
+        from . import telegram_commands
+
+        telegram_commands._PENDING_RECEIPTS.clear()
+
+    _DRAFT = {
+        "merchant": "Corner Store",
+        "date": "2026-07-20",
+        "total": "12.34",
+        "currency": "USD",
+        "suggested_category": "Groceries",
+        "confidence": 0.9,
+    }
+
+    @patch("api.telegram_commands.parse_receipt")
+    @patch("api.telegram_commands.extract_text", return_value="ocr text")
+    def test_stage_then_yes_saves_transaction(self, _mock_ocr, mock_parse):
+        from .telegram_commands import cmd_yes, stage_receipt
+
+        mock_parse.return_value = dict(self._DRAFT)
+        reply = stage_receipt(self.user, b"jpeg-bytes")
+        self.assertIn("Corner Store", reply)
+        self.assertIn("12.34", reply)
+        self.assertIn("/yes", reply)
+        # Nothing saved until confirmation.
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 0)
+
+        save_reply = cmd_yes(self.user)
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 1)
+        tx = Transaction.objects.get(user=self.user)
+        self.assertEqual(tx.type, "expense")
+        self.assertEqual(tx.amount, Decimal("12.34"))
+        self.assertEqual(tx.category.name, "Groceries")
+        self.assertIn("Saved expense", save_reply)
+        # Pending cleared after save.
+        self.assertEqual(cmd_yes(self.user), "Nothing to confirm — send a receipt photo first.")
+
+    @patch("api.telegram_commands.parse_receipt")
+    @patch("api.telegram_commands.extract_text", return_value="ocr text")
+    def test_no_discards_without_saving(self, _mock_ocr, mock_parse):
+        from .telegram_commands import cmd_no, stage_receipt
+
+        mock_parse.return_value = dict(self._DRAFT)
+        stage_receipt(self.user, b"jpeg-bytes")
+        self.assertEqual(cmd_no(self.user), "Discarded.")
+        self.assertEqual(Transaction.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(cmd_no(self.user), "Nothing to discard.")
+
+    @patch("api.telegram_commands.parse_receipt")
+    @patch("api.telegram_commands.extract_text", return_value="ocr text")
+    def test_yes_creates_missing_category(self, _mock_ocr, mock_parse):
+        from .telegram_commands import cmd_yes, stage_receipt
+
+        draft = dict(self._DRAFT, suggested_category="Gadgets")
+        mock_parse.return_value = draft
+        stage_receipt(self.user, b"jpeg-bytes")
+        cmd_yes(self.user)
+        self.assertTrue(
+            Category.objects.filter(
+                user=self.user, type="expense", name="Gadgets"
+            ).exists()
+        )
+
+    @patch(
+        "api.telegram_commands.resolve_llm",
+        side_effect=RuntimeError("vault locked"),
+    )
+    @patch("api.telegram_commands.extract_text", return_value="ocr text")
+    def test_locked_vault_asks_to_unlock(self, _mock_ocr, _mock_resolve):
+        from . import telegram_commands
+        from .telegram_commands import stage_receipt
+
+        reply = stage_receipt(self.user, b"jpeg-bytes")
+        self.assertIn("Unlock", reply)
+        self.assertNotIn(self.user.id, telegram_commands._PENDING_RECEIPTS)
+
+    @patch(
+        "api.telegram_commands.resolve_llm",
+        side_effect=LLMConfigError("no key"),
+    )
+    @patch("api.telegram_commands.extract_text", return_value="ocr text")
+    def test_no_llm_configured_message(self, _mock_ocr, _mock_resolve):
+        from .telegram_commands import stage_receipt
+
+        reply = stage_receipt(self.user, b"jpeg-bytes")
+        self.assertIn("Set up your chat LLM", reply)
+
+
+class ChatContextTests(TestCase):
+    """build_financial_context surfaces net worth, savings, stocks, budgets, analytics."""
+
+    def setUp(self):
+        self.user = create_user("frank")
+        self.food = Category.objects.get(user=self.user, name="Groceries")
+        self.salary = Category.objects.get(user=self.user, name="Salary")
+
+    def test_context_includes_all_sections(self):
+        from .views import build_financial_context
+
+        today = date.today()
+        create_transaction(self.user, self.salary, "1000.00", date=today.isoformat())
+        create_transaction(self.user, self.food, "250.00", date=today.isoformat())
+
+        NetWorthSnapshot.objects.create(
+            user=self.user,
+            date=today,
+            account_balance=Decimal("1500.00"),
+            savings_total=Decimal("800.00"),
+            portfolio_value=Decimal("2000.00"),
+        )
+        SavingsAccount.objects.create(
+            user=self.user,
+            name="Rainy Day",
+            balance=Decimal("800.00"),
+            apy_rate=Decimal("3.50"),
+            last_interest_date=today,
+        )
+        PortfolioSnapshot.objects.create(
+            user=self.user,
+            date=today,
+            total_value=Decimal("2000.00"),
+            cash=Decimal("100.00"),
+            invested=Decimal("1800.00"),
+            unrealized_pl=Decimal("100.00"),
+            currency="USD",
+            positions=[
+                {"ticker": "AAPL", "value": "1200.00", "unrealized_pl": "80.00"},
+                {"ticker": "MSFT", "value": "700.00", "unrealized_pl": "20.00"},
+            ],
+            fetched_at=timezone.now(),
+            base_currency="USD",
+            base_value=Decimal("2000.00"),
+        )
+        Budget.objects.create(
+            user=self.user,
+            category=self.food,
+            amount=Decimal("400.00"),
+            month=today.replace(day=1),
+        )
+
+        ctx = build_financial_context(self.user)
+        self.assertIn("Net worth", ctx)
+        self.assertIn("4300.00", ctx)  # 1500 + 800 + 2000
+        self.assertIn("Savings accounts", ctx)
+        self.assertIn("Rainy Day", ctx)
+        self.assertIn("Stock portfolio", ctx)
+        self.assertIn("AAPL", ctx)
+        self.assertIn("Budgets", ctx)
+        self.assertIn("Analytics", ctx)
+        self.assertIn("savings rate", ctx)
+
+    def test_context_omits_empty_sections(self):
+        from .views import build_financial_context
+
+        ctx = build_financial_context(self.user)
+        # No snapshots/savings/stocks/budgets => those blocks are absent.
+        self.assertNotIn("Net worth", ctx)
+        self.assertNotIn("Savings accounts", ctx)
+        self.assertNotIn("Stock portfolio", ctx)
+        self.assertNotIn("Budgets (", ctx)
+        # Analytics always renders (zeros are informative).
+        self.assertIn("Analytics", ctx)

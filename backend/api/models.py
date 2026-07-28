@@ -64,6 +64,16 @@ class Settings(models.Model):
         max_length=4, choices=T212_ENVIRONMENT_CHOICES, default="live"
     )
 
+    # Telegram remote-control bot config. Stored PLAINTEXT (not EncryptedCharField)
+    # on purpose: the poller runs headless at sidecar boot, before any vault
+    # unlock, so it must read the token without the DEK. The token grants control
+    # of the *bot* (add/read only), never the vault. See api/telegram_bot.py.
+    telegram_enabled = models.BooleanField(default=False)
+    telegram_bot_token = models.CharField(max_length=100, blank=True, default="")
+    telegram_allowed_user_id = models.CharField(
+        max_length=32, blank=True, default=""
+    )
+
     date_created = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)
 

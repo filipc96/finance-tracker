@@ -31,6 +31,13 @@ def main():
     call_command("migrate", "--noinput")
     call_command("collectstatic", "--noinput", verbosity=0)
 
+    # Start the Telegram remote-control bot (daemon thread, no-op unless a user
+    # has enabled it in Settings). Reads its config live and polls Telegram over
+    # outbound HTTPS; it dies with the process when the launcher reaps us.
+    from api.telegram_bot import start_background
+
+    start_background()
+
     from waitress import serve
     from backend.wsgi import application
 
