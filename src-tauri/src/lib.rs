@@ -14,8 +14,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 /// Holds the sidecar handle so we can kill it on exit.
 #[derive(Default)]
@@ -65,6 +67,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SidecarState::default())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -123,6 +127,8 @@ pub fn run() {
                         if let Some(splash) = handle.get_webview_window("splash") {
                             let _ = splash.close();
                         }
+                        // App is up; quietly check for a newer release.
+                        spawn_update_check(handle.clone());
                     }
                 } else {
                     // Backend never came up; surface the failure instead of
@@ -151,6 +157,64 @@ pub fn run() {
                 }
             }
         });
+}
+
+/// Check the update endpoint and, if a newer signed release exists, offer to
+/// install it. Runs on its own thread so it never blocks the UI.
+///
+/// Every step fails *silently* (logged, no error dialog): until the release
+/// feed in `tauri.conf.json` (plugins.updater.endpoints) is live, `check()`
+/// just can't reach it, and a launcher that nagged on every offline check would
+/// be worse than one that quietly does nothing.
+fn spawn_update_check(handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let updater = match handle.updater() {
+            Ok(u) => u,
+            Err(e) => {
+                eprintln!("updater unavailable: {e}");
+                return;
+            }
+        };
+
+        let update = match tauri::async_runtime::block_on(updater.check()) {
+            Ok(Some(update)) => update,
+            Ok(None) => return, // already on the latest version
+            Err(e) => {
+                eprintln!("update check skipped: {e}");
+                return;
+            }
+        };
+
+        let accepted = handle
+            .dialog()
+            .message(format!(
+                "Fintrax {} is available. Install it now? The app will restart.",
+                update.version
+            ))
+            .title("Update available")
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "Install".to_string(),
+                "Later".to_string(),
+            ))
+            .blocking_show();
+        if !accepted {
+            return;
+        }
+
+        // Download + apply. The NSIS installer runs to swap the binaries; on
+        // success we relaunch into the new version.
+        match tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {})) {
+            Ok(_) => handle.restart(),
+            Err(e) => {
+                eprintln!("update install failed: {e}");
+                let _ = handle
+                    .dialog()
+                    .message("The update could not be installed. Please try again later.")
+                    .title("Update failed")
+                    .blocking_show();
+            }
+        }
+    });
 }
 
 /// Kill the sidecar *and its descendants*.

@@ -324,3 +324,5 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/reac
+# Local build/test artifacts (installers, sigs, update manifest)
+/release/

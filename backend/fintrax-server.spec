@@ -69,6 +69,18 @@ for pkg in (
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
 
+# opencv ships a ~29 MB ffmpeg DLL used only for video capture/encode, which the
+# OCR path (imread/resize/warp on still receipt images) never touches. Match on
+# basename so the tuple's shape ((name, path, kind) or (src, dest)) doesn't
+# matter. The actual drop happens on `a.binaries` AFTER Analysis (below):
+# PyInstaller's bundled hook-cv2.py re-collects every OpenCV DLL during Analysis,
+# so filtering this pre-Analysis `binaries` list would be silently undone.
+import os as _os
+
+def _is_ffmpeg_dll(entry):
+    name = _os.path.basename(entry[0]).lower()
+    return name.startswith("opencv_videoio_ffmpeg")
+
 hiddenimports += ["numpy"]
 
 
@@ -84,6 +96,10 @@ a = Analysis(
     excludes=["tkinter", "psycopg2", "psycopg2-binary"],
     noarchive=False,
 )
+
+# Drop the ~29 MB opencv ffmpeg DLL now that the cv2 hook has added it during
+# Analysis. Video-only; the receipt-OCR path never loads it.
+a.binaries = [b for b in a.binaries if not _is_ffmpeg_dll(b)]
 
 pyz = PYZ(a.pure)
 
