@@ -13,6 +13,7 @@ import {
   faWallet,
   faArrowTrendUp,
   faPiggyBank,
+  faRotate,
 } from "@fortawesome/free-solid-svg-icons";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -31,14 +32,19 @@ const MyAccount = lazy(() => import("./pages/MyAccount"));
 const Categories = lazy(() => import("./pages/Categories"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const History = lazy(() => import("./pages/History"));
+const Recurring = lazy(() => import("./pages/Recurring"));
 const Budgets = lazy(() => import("./pages/Budgets"));
 const Stocks = lazy(() => import("./pages/Stocks"));
 const Savings = lazy(() => import("./pages/Savings"));
 const Settings = lazy(() => import("./pages/Settings"));
 
+// `name` is the English fallback; `labelKey` is the i18n key the sidebar renders
+// (see components/NavigationItem.jsx). Keep `name` so anything still reading it
+// keeps working.
 const menuItems = [
   {
     name: "Dashboard",
+    labelKey: "nav.dashboard",
     icon: faGauge,
     path: "/",
     index: true,
@@ -46,54 +52,73 @@ const menuItems = [
   },
   {
     name: "My Account",
+    labelKey: "nav.myAccount",
     icon: faAddressBook,
     path: "/myaccount",
     element: <MyAccount />,
   },
   {
     name: "Categories",
+    labelKey: "nav.categories",
     icon: faGroupArrowsRotate,
     path: "/categories",
     element: <Categories />,
   },
   {
     name: "Settings",
+    labelKey: "nav.settings",
     icon: faGear,
     path: "/settings",
     element: <Settings />,
   },
   {
     name: "Analytics",
+    labelKey: "nav.analytics",
     icon: faChartBar,
     path: "/analytics",
     element: <Analytics />,
   },
   {
     name: "History",
+    labelKey: "nav.history",
     icon: faHistory,
     path: "/history",
     element: <History />,
   },
   {
+    // Reached via a button on the History page, not the sidebar (hidden), so
+    // the nav doesn't pile up. Still a real route so it can be linked/deep-linked.
+    name: "Recurring",
+    labelKey: "nav.recurring",
+    icon: faRotate,
+    path: "/recurring",
+    element: <Recurring />,
+    hidden: true,
+  },
+  {
     name: "Budgets",
+    labelKey: "nav.budgets",
     icon: faWallet,
     path: "/budgets",
     element: <Budgets />,
   },
   {
     name: "Stocks",
+    labelKey: "nav.stocks",
     icon: faArrowTrendUp,
     path: "/stocks",
     element: <Stocks />,
   },
   {
     name: "Savings",
+    labelKey: "nav.savings",
     icon: faPiggyBank,
     path: "/savings",
     element: <Savings />,
   },
   {
     name: "Log Out",
+    labelKey: "nav.logout",
     icon: faSignOut,
     path: "/logout",
     element: <Logout />,

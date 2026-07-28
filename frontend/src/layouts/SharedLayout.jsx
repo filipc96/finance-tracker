@@ -4,6 +4,7 @@ import Terminal from "../components/Terminal";
 import Chat from "../components/Chat";
 import { Suspense, useState, useEffect } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import { ACCESS_TOKEN } from "../constants";
 import {
@@ -15,6 +16,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 const SharedLayout = ({ menuItems }) => {
+  const { t } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 726);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -29,16 +31,10 @@ const SharedLayout = ({ menuItems }) => {
           const created = res.data.recurring_created;
           const interest = res.data.interest_posted;
           if (created > 0) {
-            toast.success(
-              `${created} recurring transaction${created > 1 ? "s" : ""} added.`
-            );
+            toast.success(t("layout.recurringAdded", { count: created }));
           }
           if (interest > 0) {
-            toast.success(
-              `Interest posted to ${interest} savings period${
-                interest > 1 ? "s" : ""
-              }.`
-            );
+            toast.success(t("layout.interestPosted", { count: interest }));
           }
         })
         .catch(() => {});
@@ -82,7 +78,7 @@ const SharedLayout = ({ menuItems }) => {
         <button
           onClick={toggleMobileMenu}
           className="md:hidden fixed top-4 right-4 z-[60] p-2 rounded-lg bg-gray-800 text-white"
-          aria-label="Toggle Menu"
+          aria-label={t("layout.toggleMenu")}
         >
           <FontAwesomeIcon
             icon={isMobileMenuOpen ? faXmark : faBars}
@@ -120,7 +116,7 @@ const SharedLayout = ({ menuItems }) => {
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-full text-gray-400">
-                Loading…
+                {t("common.loading")}
               </div>
             }
           >
@@ -140,7 +136,7 @@ const SharedLayout = ({ menuItems }) => {
         <button
           onClick={() => setIsChatOpen(!isChatOpen)}
           className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors duration-200 shadow-lg"
-          aria-label="Toggle Chat"
+          aria-label={t("layout.toggleChat")}
         >
           <FontAwesomeIcon icon={faMessage} size="lg" />
         </button>
@@ -148,7 +144,7 @@ const SharedLayout = ({ menuItems }) => {
         <button
           onClick={() => setIsTerminalOpen(!isTerminalOpen)}
           className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors duration-200 shadow-lg"
-          aria-label="Toggle Terminal"
+          aria-label={t("layout.toggleTerminal")}
         >
           <FontAwesomeIcon icon={faTerminal} size="lg" />
         </button>

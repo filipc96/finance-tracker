@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { faTerminal } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
@@ -13,6 +14,7 @@ const HELP_LINES = [
 ];
 
 const Terminal = ({ isOpen, setIsOpen }) => {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [history, setHistory] = useState([]);
 
@@ -97,7 +99,7 @@ const Terminal = ({ isOpen, setIsOpen }) => {
           <div className="flex flex-col h-full">
             <div className="bg-gray-800 px-4 py-3 flex items-center justify-between border-b border-gray-700">
               <span className="text-sm font-semibold text-gray-300">
-                Terminal
+                {t("terminal.title")}
               </span>
               <div className="flex space-x-2">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
@@ -124,7 +126,7 @@ const Terminal = ({ isOpen, setIsOpen }) => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 className="flex-1 bg-transparent outline-none font-mono text-sm text-gray-300 placeholder-gray-500"
-                placeholder="Type a command..."
+                placeholder={t("terminal.placeholder")}
                 autoFocus
               />
             </form>

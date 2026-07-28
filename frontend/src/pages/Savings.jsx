@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -28,13 +29,14 @@ ChartJS.register(
 );
 
 const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdateRate }) => {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState("");
   const [editingRate, setEditingRate] = useState(false);
   const [rate, setRate] = useState(account.apy_rate);
 
   const act = (type) => {
     if (!amount || Number(amount) <= 0) {
-      toast.error("Enter a positive amount.");
+      toast.error(t("savings.enterPositive"));
       return;
     }
     onAction(account.id, type, amount);
@@ -55,7 +57,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
           <span className="font-semibold">{account.name}</span>
           {!account.active && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-              inactive
+              {t("savings.inactive")}
             </span>
           )}
         </div>
@@ -66,7 +68,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
           }}
           className="text-red-500 text-sm hover:text-red-600"
         >
-          Delete
+          {t("common.delete")}
         </button>
       </div>
 
@@ -84,7 +86,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
               onClick={(e) => e.stopPropagation()}
               className="w-20 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800"
             />
-            <span>% / yr</span>
+            <span>{t("savings.perYear")}</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -93,12 +95,15 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
               }}
               className="text-blue-600"
             >
-              Save
+              {t("common.save")}
             </button>
           </>
         ) : (
           <>
-            <span>{account.apy_rate}% / yr</span>
+            <span>
+              {account.apy_rate}
+              {t("savings.perYear")}
+            </span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -106,7 +111,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
               }}
               className="text-blue-600"
             >
-              Edit
+              {t("common.edit")}
             </button>
           </>
         )}
@@ -120,7 +125,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
           type="number"
           min="0"
           step="0.01"
-          placeholder="Amount"
+          placeholder={t("savings.amount")}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="w-28 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800"
@@ -129,13 +134,13 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
           onClick={() => act("deposit")}
           className="px-3 py-1 rounded bg-green-600 text-white text-sm hover:bg-green-700"
         >
-          Deposit
+          {t("savings.deposit")}
         </button>
         <button
           onClick={() => act("withdraw")}
           className="px-3 py-1 rounded bg-gray-600 text-white text-sm hover:bg-gray-700"
         >
-          Withdraw
+          {t("savings.withdraw")}
         </button>
       </div>
     </div>
@@ -143,6 +148,7 @@ const AccountCard = ({ account, selected, onSelect, onAction, onDelete, onUpdate
 };
 
 const Savings = () => {
+  const { t } = useTranslation();
   const { darkMode } = useTheme();
   const [accounts, setAccounts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -158,7 +164,7 @@ const Savings = () => {
           setSelectedId(res.data[0].id);
         }
       })
-      .catch(() => toast.error("Failed to load savings accounts."));
+      .catch(() => toast.error(t("savings.loadFailed")));
   };
 
   const getHistory = (id) => {
@@ -166,7 +172,7 @@ const Savings = () => {
     api
       .get(`/api/savings/${id}/transactions/`)
       .then((res) => setHistory(res.data))
-      .catch(() => toast.error("Failed to load savings history."));
+      .catch(() => toast.error(t("savings.historyLoadFailed")));
   };
 
   useEffect(() => {
@@ -180,7 +186,7 @@ const Savings = () => {
   const addAccount = (e) => {
     e.preventDefault();
     if (!form.name || form.apy_rate === "") {
-      toast.error("Name and annual rate are required.");
+      toast.error(t("savings.nameRateRequired"));
       return;
     }
     const payload = { name: form.name, apy_rate: form.apy_rate };
@@ -188,7 +194,7 @@ const Savings = () => {
     api
       .post("/api/savings/", payload)
       .then(() => {
-        toast.success("Savings account created.");
+        toast.success(t("savings.created"));
         setForm({ name: "", apy_rate: "", starting_balance: "" });
         getAccounts();
       })
@@ -197,7 +203,7 @@ const Savings = () => {
         toast.error(
           data?.apy_rate?.[0] ||
             data?.starting_balance?.[0] ||
-            "Failed to create savings account."
+            t("savings.createFailed")
         );
       });
   };
@@ -206,11 +212,18 @@ const Savings = () => {
     api
       .post(`/api/savings/${id}/transactions/`, { type, amount })
       .then(() => {
-        toast.success(type === "deposit" ? "Deposited." : "Withdrawn.");
+        toast.success(
+          type === "deposit" ? t("savings.deposited") : t("savings.withdrawn")
+        );
         getAccounts();
       })
       .catch((error) =>
-        toast.error(error.response?.data?.error || `Failed to ${type}.`)
+        toast.error(
+          error.response?.data?.error ||
+            (type === "deposit"
+              ? t("savings.depositFailed")
+              : t("savings.withdrawFailed"))
+        )
       );
   };
 
@@ -218,22 +231,22 @@ const Savings = () => {
     api
       .patch(`/api/savings/${id}/`, { apy_rate })
       .then(() => {
-        toast.success("Rate updated.");
+        toast.success(t("savings.rateUpdated"));
         getAccounts();
       })
-      .catch(() => toast.error("Failed to update rate."));
+      .catch(() => toast.error(t("savings.rateUpdateFailed")));
   };
 
   const deleteAccount = (id) => {
-    if (!window.confirm("Delete this savings account and its history?")) return;
+    if (!window.confirm(t("savings.confirmDelete"))) return;
     api
       .delete(`/api/savings/${id}/`)
       .then(() => {
-        toast.success("Savings account deleted.");
+        toast.success(t("savings.accountDeleted"));
         if (selectedId === id) setSelectedId(null);
         getAccounts();
       })
-      .catch(() => toast.error("Failed to delete savings account."));
+      .catch(() => toast.error(t("savings.deleteFailed")));
   };
 
   const selected = accounts.find((a) => a.id === selectedId);
@@ -241,7 +254,9 @@ const Savings = () => {
     labels: history.map((h) => h.date),
     datasets: [
       {
-        label: selected ? `${selected.name} balance` : "Balance",
+        label: selected
+          ? `${selected.name} ${t("savings.balance")}`
+          : t("savings.balance"),
         data: history.map((h) => h.balance_after),
         borderColor: "rgb(59, 130, 246)",
         backgroundColor: "rgba(59, 130, 246, 0.2)",
@@ -256,7 +271,7 @@ const Savings = () => {
 
   return (
     <>
-      <h2>Savings</h2>
+      <h2>{t("savings.title")}</h2>
 
       <div className="flex flex-col gap-8 py-6">
         <form
@@ -265,19 +280,19 @@ const Savings = () => {
         >
           <div className="flex flex-col">
             <label className="text-sm mb-1 text-gray-600 dark:text-gray-300">
-              Name
+              {t("savings.name")}
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className={`${inputClass} w-44`}
-              placeholder="Emergency fund"
+              placeholder={t("savings.namePlaceholder")}
             />
           </div>
           <div className="flex flex-col">
             <label className="text-sm mb-1 text-gray-600 dark:text-gray-300">
-              Annual rate %
+              {t("savings.annualRate")}
             </label>
             <input
               type="number"
@@ -291,7 +306,7 @@ const Savings = () => {
           </div>
           <div className="flex flex-col">
             <label className="text-sm mb-1 text-gray-600 dark:text-gray-300">
-              Starting balance (optional)
+              {t("savings.startingBalance")}
             </label>
             <input
               type="number"
@@ -305,13 +320,13 @@ const Savings = () => {
             />
           </div>
           <Button type="submit" variant="secondary">
-            Add Account
+            {t("savings.addAccount")}
           </Button>
         </form>
 
         {accounts.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400">
-            No savings accounts yet.
+            {t("savings.noAccounts")}
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl">
@@ -332,7 +347,7 @@ const Savings = () => {
         {selected && history.length > 0 && (
           <div className="max-w-4xl w-full rounded-lg border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="font-semibold mb-4">
-              {selected.name} — balance over time
+              {t("savings.balanceOverTime", { name: selected.name })}
             </h3>
             <div className="relative h-72">
               <Line data={chartData} options={buildLineOptions(darkMode)} />

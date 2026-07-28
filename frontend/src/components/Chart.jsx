@@ -16,6 +16,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useCurrency } from "../contexts/CurrencyContext";
 import { buildLineOptions, CHART_COLORS, withAlpha } from "../utils/chartTheme";
 import ChartHeader from "./ui/ChartHeader";
+import { useTranslation } from "react-i18next";
 
 ChartJS.register(
   CategoryScale,
@@ -28,25 +29,12 @@ ChartJS.register(
   Filler
 );
 
-const LABELS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sept",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
 const Chart = ({ type, refreshKey, title }) => {
+  const { t } = useTranslation();
   const [sums, setSums] = useState({});
   const { darkMode } = useTheme();
   const { displayCurrency, displayRate } = useCurrency();
+  const LABELS = t("common.monthsShort", { returnObjects: true });
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -63,7 +51,7 @@ const Chart = ({ type, refreshKey, title }) => {
     labels: LABELS,
     datasets: [
       {
-        label: type === "expense" ? "Expenses" : "Income",
+        label: type === "expense" ? t("chart.expenses") : t("chart.income"),
         data: sums,
         borderColor: color,
         backgroundColor: withAlpha(color, 0.15),

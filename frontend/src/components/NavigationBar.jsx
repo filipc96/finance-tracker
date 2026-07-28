@@ -1,11 +1,17 @@
 import NavigationItem from "./NavigationItem";
 import { faWallet } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useTranslation } from "react-i18next";
 
 const NavigationBar = ({ menuItems }) => {
-  const getNavigationItems = menuItems.map((item, index) => (
-    <NavigationItem key={index} item={item}></NavigationItem>
-  ));
+  const { t } = useTranslation();
+  // `hidden` items are routed but kept off the sidebar (e.g. Recurring, which is
+  // reached via a button on the History page).
+  const getNavigationItems = menuItems
+    .filter((item) => !item.hidden)
+    .map((item, index) => (
+      <NavigationItem key={index} item={item}></NavigationItem>
+    ));
 
   return (
     <div className="h-screen px-6 md:px-10 py-8 md:py-12 flex flex-col">
@@ -21,7 +27,7 @@ const NavigationBar = ({ menuItems }) => {
             Fintrax
           </span>
           <span className="text-xs md:text-sm text-gray-500">
-            Personal Finance
+            {t("app.tagline")}
           </span>
         </div>
       </div>

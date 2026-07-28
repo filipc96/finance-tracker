@@ -1,9 +1,11 @@
 import ToggleButton from "../components/ToggleButton";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCurrency } from "../contexts/CurrencyContext";
 import { CURRENCY_OPTIONS } from "../utils/formatCurrency";
+import { LANGUAGES, setLanguage } from "../i18n";
 import api from "../api";
 import toast from "react-hot-toast";
 import Card from "../components/ui/Card";
@@ -13,8 +15,10 @@ import PasswordInput from "../components/ui/PasswordInput";
 import Button from "../components/ui/Button";
 
 const Settings = () => {
+  const { t, i18n } = useTranslation();
   const { darkMode } = useTheme();
   const { baseCurrency, displayCurrency, changeDisplay } = useCurrency();
+  const [language, setLanguageState] = useState(i18n.language);
   const [apiKey, setApiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [llmProvider, setLlmProvider] = useState("openai");
@@ -24,6 +28,9 @@ const Settings = () => {
   const [t212Key, setT212Key] = useState("");
   const [t212Secret, setT212Secret] = useState("");
   const [t212Environment, setT212Environment] = useState("live");
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramAllowedId, setTelegramAllowedId] = useState("");
   const [username, setUsername] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   // Whether a secret is already stored server-side. The raw keys are never
@@ -43,6 +50,10 @@ const Settings = () => {
       setOllamaUrl(response.data.ollama_base_url || "");
       setLmstudioUrl(response.data.lmstudio_base_url || "");
       setT212Environment(response.data.t212_environment || "live");
+      setTelegramEnabled(!!response.data.telegram_enabled);
+      setTelegramToken(response.data.telegram_bot_token || "");
+      setTelegramAllowedId(response.data.telegram_allowed_user_id || "");
+      if (response.data.language) setLanguageState(response.data.language);
       setHasKeys({
         open_ai: !!response.data.has_open_ai_api_key,
         anthropic: !!response.data.has_anthropic_api_key,
@@ -56,6 +67,15 @@ const Settings = () => {
       .catch(() => {});
   }, []);
 
+  // Switch the UI language immediately (i18next + localStorage) and persist the
+  // preference to the account. Non-fatal if the save fails — the view still
+  // updates locally.
+  const handleLanguageChange = (code) => {
+    setLanguageState(code);
+    setLanguage(code);
+    api.post("/api/settings/", { language: code }).catch(() => {});
+  };
+
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
@@ -66,6 +86,11 @@ const Settings = () => {
         ollama_base_url: ollamaUrl,
         lmstudio_base_url: lmstudioUrl,
         t212_environment: t212Environment,
+        // Telegram bot config is plaintext and round-trips like the URLs above,
+        // so always send the current values.
+        telegram_enabled: telegramEnabled,
+        telegram_bot_token: telegramToken,
+        telegram_allowed_user_id: telegramAllowedId,
       };
       // Only send a secret when the user actually typed one — a blank field
       // means "keep the stored key".
@@ -86,47 +111,57 @@ const Settings = () => {
       setAnthropicKey("");
       setT212Key("");
       setT212Secret("");
-      toast.success("Settings saved.");
+      toast.success(t("settings.toast.saved"));
     } catch (error) {
-      toast.error("Failed to save settings.");
+      toast.error(t("settings.toast.saveFailed"));
     } finally {
       setIsSaving(false);
     }
   };
 
   const savedPlaceholder = (fallback, isSet) =>
-    isSet ? "Saved — leave blank to keep" : fallback;
+    isSet ? t("settings.savedPlaceholder") : fallback;
 
   const modelPlaceholder =
     llmProvider === "openai"
-      ? "gpt-5-mini (default)"
+      ? t("settings.ai.modelPlaceholderOpenai")
       : llmProvider === "anthropic"
-      ? "claude-sonnet-4-6 (default)"
-      : "e.g. llama3, qwen2.5 — required for local providers";
+      ? t("settings.ai.modelPlaceholderAnthropic")
+      : t("settings.ai.modelPlaceholderLocal");
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl pb-10">
-      <h2>Settings</h2>
+      <h2>{t("settings.title")}</h2>
 
       <Card
-        title="Appearance"
-        description="How the app looks on this device."
+        title={t("settings.appearance.title")}
+        description={t("settings.appearance.description")}
       >
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              Dark Mode
+              {t("settings.darkMode")}
             </span>
             <ToggleButton />
           </div>
+          <Select
+            label={t("settings.language")}
+            value={language}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </Select>
           <div className="flex items-center justify-between">
             <div>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                Base Currency
+                {t("settings.baseCurrency")}
               </span>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Chosen at sign-up and locked — every stored amount is in this
-                currency.
+                {t("settings.baseCurrencyDesc")}
               </p>
             </div>
             <span className="font-semibold text-gray-900 dark:text-gray-100">
@@ -134,32 +169,31 @@ const Settings = () => {
             </span>
           </div>
           <Select
-            label="Display Currency"
+            label={t("settings.displayCurrency")}
             value={displayCurrency}
             onChange={(e) => changeDisplay(e.target.value)}
           >
             {CURRENCY_OPTIONS.map((c) => (
               <option key={c.code} value={c.code}>
                 {c.code} — {c.label}
-                {c.code === baseCurrency ? " (base)" : ""}
+                {c.code === baseCurrency ? ` ${t("settings.baseSuffix")}` : ""}
               </option>
             ))}
           </Select>
           <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-            Amounts are converted from {baseCurrency} for display only — your
-            data isn't changed.
+            {t("settings.displayNote", { currency: baseCurrency })}
           </p>
         </div>
       </Card>
 
       <Card
-        title="AI & Chat"
-        description="Provider and model used by the financial assistant. Local providers (Ollama, LM Studio) need no API key."
+        title={t("settings.ai.title")}
+        description={t("settings.ai.description")}
       >
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
-              label="Provider"
+              label={t("settings.ai.provider")}
               value={llmProvider}
               onChange={(e) => {
                 setLlmProvider(e.target.value);
@@ -168,11 +202,11 @@ const Settings = () => {
             >
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
-              <option value="ollama">Ollama (local)</option>
-              <option value="lmstudio">LM Studio (local)</option>
+              <option value="ollama">{t("settings.ai.ollamaLocal")}</option>
+              <option value="lmstudio">{t("settings.ai.lmstudioLocal")}</option>
             </Select>
             <Input
-              label="Model"
+              label={t("settings.ai.model")}
               type="text"
               list="llm-model-options"
               value={llmModel}
@@ -199,29 +233,29 @@ const Settings = () => {
 
           {llmProvider === "openai" && (
             <PasswordInput
-              label="OpenAI API Key"
+              label={t("settings.ai.openaiKey")}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={savedPlaceholder(
-                "Enter your OpenAI API key",
+                t("settings.ai.openaiKeyPlaceholder"),
                 hasKeys.open_ai
               )}
             />
           )}
           {llmProvider === "anthropic" && (
             <PasswordInput
-              label="Anthropic API Key"
+              label={t("settings.ai.anthropicKey")}
               value={anthropicKey}
               onChange={(e) => setAnthropicKey(e.target.value)}
               placeholder={savedPlaceholder(
-                "Enter your Anthropic API key",
+                t("settings.ai.anthropicKeyPlaceholder"),
                 hasKeys.anthropic
               )}
             />
           )}
           {llmProvider === "ollama" && (
             <Input
-              label="Ollama Base URL"
+              label={t("settings.ai.ollamaUrl")}
               type="text"
               value={ollamaUrl}
               onChange={(e) => setOllamaUrl(e.target.value)}
@@ -230,7 +264,7 @@ const Settings = () => {
           )}
           {llmProvider === "lmstudio" && (
             <Input
-              label="LM Studio Base URL"
+              label={t("settings.ai.lmstudioUrl")}
               type="text"
               value={lmstudioUrl}
               onChange={(e) => setLmstudioUrl(e.target.value)}
@@ -241,44 +275,111 @@ const Settings = () => {
       </Card>
 
       <Card
-        title="Trading 212"
-        description="API credentials for portfolio sync. Generate them in the Trading 212 app under Settings → API."
+        title={t("settings.t212.title")}
+        description={t("settings.t212.description")}
       >
         <div className="flex flex-col gap-4">
           <PasswordInput
-            label="API Key"
+            label={t("settings.t212.apiKey")}
             value={t212Key}
             onChange={(e) => setT212Key(e.target.value)}
             placeholder={savedPlaceholder(
-              "Enter your Trading 212 API key",
+              t("settings.t212.apiKeyPlaceholder"),
               hasKeys.t212_key
             )}
           />
           <PasswordInput
-            label="API Secret"
+            label={t("settings.t212.apiSecret")}
             value={t212Secret}
             onChange={(e) => setT212Secret(e.target.value)}
             placeholder={savedPlaceholder(
-              "Enter your Trading 212 API secret",
+              t("settings.t212.apiSecretPlaceholder"),
               hasKeys.t212_secret
             )}
           />
           <Select
-            label="Environment"
+            label={t("settings.t212.environment")}
             value={t212Environment}
             onChange={(e) => setT212Environment(e.target.value)}
           >
-            <option value="live">Live</option>
-            <option value="demo">Demo (paper trading)</option>
+            <option value="live">{t("settings.t212.live")}</option>
+            <option value="demo">{t("settings.t212.demo")}</option>
           </Select>
         </div>
       </Card>
 
-      <Card title="Account" description="Profile and security.">
+      <Card
+        title={t("settings.telegram.title")}
+        description={t("settings.telegram.description")}
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="pr-4">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {t("settings.telegram.enable")}
+              </span>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.telegram.enableDesc")}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={telegramEnabled}
+              onClick={() => setTelegramEnabled((v) => !v)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 ${
+                telegramEnabled
+                  ? "bg-blue-600"
+                  : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                  telegramEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          <PasswordInput
+            label={t("settings.telegram.botToken")}
+            value={telegramToken}
+            onChange={(e) => setTelegramToken(e.target.value)}
+            placeholder="123456789:ABCdef... (from @BotFather)"
+          />
+          <Input
+            label={t("settings.telegram.userId")}
+            type="text"
+            value={telegramAllowedId}
+            onChange={(e) => setTelegramAllowedId(e.target.value)}
+            placeholder={t("settings.telegram.userIdPlaceholder")}
+          />
+
+          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            <p>
+              <span className="font-medium">{t("settings.telegram.setupLabel")}</span>{" "}
+              {t("settings.telegram.setupPart1")}{" "}
+              <span className="font-mono">@BotFather</span>{" "}
+              {t("settings.telegram.setupPart2")}{" "}
+              <span className="font-mono">@userinfobot</span>{" "}
+              {t("settings.telegram.setupPart3")}
+            </p>
+            <p>{t("settings.telegram.oneUser")}</p>
+            <p className="text-amber-600 dark:text-amber-500">
+              {t("settings.telegram.privacyNote")}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        title={t("settings.account.title")}
+        description={t("settings.account.description")}
+      >
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              Signed in as
+              {t("settings.account.signedInAs")}
             </div>
             <div className="font-medium text-gray-900 dark:text-gray-100">
               {username || "…"}
@@ -286,7 +387,7 @@ const Settings = () => {
           </div>
           <Link to="/myaccount">
             <Button variant="ghost" size="sm">
-              Manage account
+              {t("settings.account.manage")}
             </Button>
           </Link>
         </div>
@@ -297,7 +398,7 @@ const Settings = () => {
         isLoading={isSaving}
         className="w-full"
       >
-        Save Settings
+        {t("settings.saveButton")}
       </Button>
     </div>
   );

@@ -15,10 +15,12 @@ import ChartErrorBoundary from "../components/ChartErrorBoundary";
 import Card from "../components/ui/Card";
 import { formatWhole } from "../utils/formatCurrency";
 import { useCurrency } from "../contexts/CurrencyContext";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import toast from "react-hot-toast";
 
 const Dashboard = () => {
+  const { t } = useTranslation();
   const { displayCurrency, displayRate } = useCurrency();
   const [username, setUsername] = useState("");
   const [balance, setBalance] = useState(0);
@@ -56,7 +58,7 @@ const Dashboard = () => {
       const rows = netWorthData.data || [];
       setNetWorth(rows.length ? rows[rows.length - 1].net_worth : null);
     } catch (error) {
-      toast.error("Failed to load dashboard data.");
+      toast.error(t("dashboard.loadFailed"));
     }
   };
 
@@ -76,10 +78,10 @@ const Dashboard = () => {
   return (
     <>
       <div className="flex flex-col gap-1">
-        <h1>Dashboard</h1>
+        <h1>{t("dashboard.title")}</h1>
         {username && (
           <p className="text-gray-500 dark:text-gray-400">
-            Welcome back, {username}
+            {t("dashboard.welcome", { name: username })}
           </p>
         )}
       </div>
@@ -87,23 +89,23 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 gap-4 py-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           icon={faScaleBalanced}
-          label="Net Worth"
+          label={t("dashboard.netWorth")}
           value={formatWhole(netWorth, displayCurrency, displayRate)}
         />
         <StatCard
           icon={faWallet}
-          label="Balance"
+          label={t("dashboard.balance")}
           value={formatWhole(balance, displayCurrency, displayRate)}
         />
         <StatCard
           icon={faArrowTrendDown}
-          label="Total Spent"
+          label={t("dashboard.totalSpent")}
           value={formatWhole(allTimeSpent, displayCurrency, displayRate)}
           tone="negative"
         />
         <StatCard
           icon={faArrowUp}
-          label="Latest Income"
+          label={t("dashboard.latestIncome")}
           value={
             latestIncome
               ? formatWhole(latestIncome.amount, displayCurrency, displayRate)
@@ -112,13 +114,13 @@ const Dashboard = () => {
           subtext={
             latestIncome
               ? `${latestIncome.name} · ${formatDate(latestIncome.date)}`
-              : "No income yet"
+              : t("dashboard.noIncome")
           }
           tone="positive"
         />
         <StatCard
           icon={faArrowDown}
-          label="Latest Expense"
+          label={t("dashboard.latestExpense")}
           value={
             latestExpense
               ? formatWhole(latestExpense.amount, displayCurrency, displayRate)
@@ -127,7 +129,7 @@ const Dashboard = () => {
           subtext={
             latestExpense
               ? `${latestExpense.name} · ${formatDate(latestExpense.date)}`
-              : "No expenses yet"
+              : t("dashboard.noExpenses")
           }
           tone="negative"
         />
@@ -139,7 +141,7 @@ const Dashboard = () => {
             <ChartErrorBoundary>
               <Chart
                 type="expense"
-                title="Expenses this year"
+                title={t("dashboard.expensesThisYear")}
                 refreshKey={refreshKey}
               />
             </ChartErrorBoundary>
@@ -148,7 +150,7 @@ const Dashboard = () => {
             <ChartErrorBoundary>
               <Chart
                 type="income"
-                title="Income this year"
+                title={t("dashboard.incomeThisYear")}
                 refreshKey={refreshKey}
               />
             </ChartErrorBoundary>

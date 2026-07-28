@@ -1,12 +1,14 @@
 import AddCategory from "../components/AddCategory";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import CategoryTable from "../components/CategoryTable";
 import Input from "../components/ui/Input";
 import Select from "../components/ui/Select";
 
 const Categories = () => {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -15,17 +17,17 @@ const Categories = () => {
     api
       .get("/api/categories/")
       .then((response) => setCategories(response.data))
-      .catch(() => toast.error("Failed to load categories."));
+      .catch(() => toast.error(t("transaction.loadCategoriesFailed")));
   };
 
   const deleteCategory = (id) => {
     api
       .delete(`/api/categories/delete/${id}`)
       .then(() => {
-        toast.success("Category deleted.");
+        toast.success(t("categories.deleted"));
         getCategories();
       })
-      .catch(() => toast.error("Failed to delete category."));
+      .catch(() => toast.error(t("categories.deleteFailed")));
   };
 
   useEffect(() => {
@@ -44,28 +46,28 @@ const Categories = () => {
 
   return (
     <>
-      <h2>Categories</h2>
+      <h2>{t("categories.title")}</h2>
 
       <div className="flex flex-col space-y-20 py-6 items-center justify-items-center">
         <AddCategory callback={getCategories}></AddCategory>
         <div className="w-full">
           <div className="flex flex-wrap items-end gap-3 pb-4">
             <Input
-              label="Search"
-              placeholder="Name contains…"
+              label={t("history.search")}
+              placeholder={t("history.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-56"
             />
             <Select
-              label="Type"
+              label={t("history.type")}
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="w-40"
             >
-              <option value="">All types</option>
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
+              <option value="">{t("history.allTypes")}</option>
+              <option value="income">{t("chart.income")}</option>
+              <option value="expense">{t("history.expense")}</option>
             </Select>
           </div>
           <CategoryTable categories={visible} onDelete={deleteCategory} />

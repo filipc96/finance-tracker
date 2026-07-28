@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api from "../api";
+import { setLanguage } from "../i18n";
 import {
   setActiveBase,
   setActiveDisplay,
@@ -59,6 +60,12 @@ export const CurrencyProvider = ({ children }) => {
       setActiveBase(base);
       setBaseCurrency(base);
       applyDisplay(base, display);
+      // Sync the saved UI language from the account into the running app +
+      // localStorage. Mirrors the dark-mode fallback pattern; a blank value
+      // leaves the current (localStorage/default) language untouched.
+      if (response.data.language) {
+        setLanguage(response.data.language);
+      }
     });
   }, [applyDisplay]);
 

@@ -10,8 +10,10 @@ import Select from "./ui/Select";
 import Button from "./ui/Button";
 import { useCurrency } from "../contexts/CurrencyContext";
 import { CURRENCY_OPTIONS } from "../utils/formatCurrency";
+import { useTranslation } from "react-i18next";
 
 const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
+  const { t } = useTranslation();
   const { baseCurrency } = useCurrency();
   const [categories, setCategories] = useState([]);
   const [date, setDate] = useState(new Date());
@@ -33,7 +35,7 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
     api
       .get("/api/categories/")
       .then((response) => setCategories(response.data))
-      .catch(() => toast.error("Failed to load categories."));
+      .catch(() => toast.error(t("transaction.loadCategoriesFailed")));
   }, []);
 
   const categoryOptions = categories
@@ -60,15 +62,19 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
           currency: currency,
         })
         .then(() => {
-          toast.success(`${type === "expense" ? "Expense" : "Income"} added.`);
+          toast.success(
+            type === "expense"
+              ? t("transaction.expenseAdded")
+              : t("transaction.incomeAdded")
+          );
           setName("");
           setAmount("");
           if (callback) callback();
         })
-        .catch(() => toast.error("Failed to add transaction."))
+        .catch(() => toast.error(t("transaction.addFailed")))
         .finally(() => setIsSaving(false));
     } else {
-      toast.error("You can't leave the fields empty!");
+      toast.error(t("transaction.emptyFields"));
     }
   };
 
@@ -77,12 +83,16 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
       className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full h-auto p-6 ${className}`}
     >
       <form onSubmit={addTransaction} className="flex flex-col gap-4">
-        <h3>Add {type === "expense" ? "Expense" : "Income"}</h3>
+        <h3>
+          {type === "expense"
+            ? t("transaction.addExpense")
+            : t("transaction.addIncome")}
+        </h3>
 
         <Input
-          label="Short Description"
+          label={t("transaction.description")}
           type="text"
-          placeholder="Type short description"
+          placeholder={t("transaction.descriptionPlaceholder")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -90,7 +100,7 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
-            label="Amount"
+            label={t("transaction.amount")}
             type="number"
             min="0"
             step="0.01"
@@ -100,7 +110,7 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
             required
           />
           <Select
-            label="Currency"
+            label={t("transaction.currency")}
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
           >
@@ -114,23 +124,23 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
         </div>
 
         <Select
-          label="Category"
+          label={t("transaction.category")}
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         >
-          <option value="">Select category</option>
+          <option value="">{t("transaction.selectCategory")}</option>
           {categoryOptions}
         </Select>
 
         {currency !== baseCurrency && (
           <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
-            Converted to {baseCurrency} at today's rate when saved.
+            {t("transaction.conversionNote", { currency: baseCurrency })}
           </p>
         )}
 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Date
+            {t("transaction.date")}
           </label>
           <DatePicker
             selected={date}
@@ -145,7 +155,9 @@ const AddTransaction = ({ type, callback, className = "max-w-md" }) => {
           isLoading={isSaving}
           className="w-full mt-1"
         >
-          Add {type === "expense" ? "Expense" : "Income"}
+          {type === "expense"
+            ? t("transaction.addExpense")
+            : t("transaction.addIncome")}
         </Button>
       </form>
     </div>

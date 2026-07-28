@@ -5,13 +5,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
 import Card from "./ui/Card";
 import { formatMoney } from "../utils/formatCurrency";
+import { useTranslation } from "react-i18next";
 
 // Compact current-month budget status for the dashboard. Surfaces categories
 // that are near (>=75%) or over their limit so the user sees trouble without
 // visiting the Budgets page. The full bars/editing live on /budgets.
 const NEAR_THRESHOLD = 75;
 
-const BudgetAlerts = () => {
+const BudgetAlerts = ({ refreshKey }) => {
+  const { t } = useTranslation();
   const [budgets, setBudgets] = useState(null);
 
   useEffect(() => {
@@ -19,7 +21,7 @@ const BudgetAlerts = () => {
       .get("/api/budgets/")
       .then((res) => setBudgets(res.data))
       .catch(() => setBudgets([]));
-  }, []);
+  }, [refreshKey]);
 
   // Nothing to say until we know there are budgets to report on.
   if (!budgets || budgets.length === 0) return null;
@@ -37,18 +39,18 @@ const BudgetAlerts = () => {
   return (
     <Card>
       <div className="flex items-center justify-between mb-3">
-        <span className="font-semibold">Budget alerts</span>
+        <span className="font-semibold">{t("budgetAlerts.title")}</span>
         <Link
           to="/budgets"
           className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
         >
-          Manage
+          {t("budgetAlerts.manage")}
         </Link>
       </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          All budgets on track this month.
+          {t("budgetAlerts.onTrack")}
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -84,7 +86,8 @@ const BudgetAlerts = () => {
                       : "text-gray-500 dark:text-gray-400"
                   }`}
                 >
-                  {b.percent}% used{over ? " — over budget!" : ""}
+                  {t("budgetAlerts.used", { percent: b.percent })}
+                  {over ? t("budgetAlerts.overBudget") : ""}
                 </div>
               </div>
             );

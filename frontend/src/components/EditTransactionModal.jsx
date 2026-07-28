@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
@@ -10,6 +11,7 @@ import Button from "./ui/Button";
 // which keeps the type/category pairing consistent. The backend re-balances the
 // account via its save signals.
 const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
   const [name, setName] = useState(transaction.name);
   const [amount, setAmount] = useState(String(transaction.amount));
@@ -21,7 +23,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
     api
       .get("/api/categories/")
       .then((res) => setCategories(res.data))
-      .catch(() => toast.error("Failed to load categories."));
+      .catch(() => toast.error(t("transaction.loadCategoriesFailed")));
   }, []);
 
   const categoryOptions = categories
@@ -35,7 +37,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
   const save = (e) => {
     e.preventDefault();
     if (!(name && amount && date && category)) {
-      toast.error("You can't leave the fields empty!");
+      toast.error(t("transaction.emptyFields"));
       return;
     }
     setIsSaving(true);
@@ -48,7 +50,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
         type: transaction.type,
       })
       .then(() => {
-        toast.success("Transaction updated.");
+        toast.success(t("editTx.updated"));
         onUpdated();
         onClose();
       })
@@ -56,7 +58,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
         toast.error(
           err.response?.data?.amount?.[0] ||
             err.response?.data?.category?.[0] ||
-            "Failed to update transaction."
+            t("editTx.updateFailed")
         )
       )
       .finally(() => setIsSaving(false));
@@ -72,10 +74,14 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <form onSubmit={save} className="flex flex-col gap-4">
-          <h3>Edit {transaction.type === "expense" ? "Expense" : "Income"}</h3>
+          <h3>
+            {transaction.type === "expense"
+              ? t("editTx.editExpense")
+              : t("editTx.editIncome")}
+          </h3>
 
           <Input
-            label="Short Description"
+            label={t("transaction.description")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -83,7 +89,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
-              label="Amount"
+              label={t("transaction.amount")}
               type="number"
               min="0"
               step="0.01"
@@ -92,17 +98,17 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
               required
             />
             <Select
-              label="Category"
+              label={t("transaction.category")}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              <option value="">Select category</option>
+              <option value="">{t("transaction.selectCategory")}</option>
               {categoryOptions}
             </Select>
           </div>
 
           <Input
-            label="Date"
+            label={t("transaction.date")}
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
@@ -111,7 +117,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
 
           <div className="flex justify-end gap-3 mt-1">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               type="submit"
@@ -119,7 +125,7 @@ const EditTransactionModal = ({ transaction, onClose, onUpdated }) => {
               size="sm"
               isLoading={isSaving}
             >
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </form>

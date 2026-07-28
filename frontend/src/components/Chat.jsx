@@ -1,14 +1,79 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane } from "@fortawesome/free-solid-svg-icons";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+// Tailwind element styles for the LLM's markdown, sized for the compact dark
+// chat bubble. No @tailwindcss/typography plugin is installed, so each element
+// is mapped explicitly. Links open externally; the strict Tauri CSP is fine
+// because react-markdown renders to DOM nodes, not injected HTML strings.
+const markdownComponents = {
+  p: (props) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+  ul: (props) => (
+    <ul className="mb-2 last:mb-0 list-disc pl-5 space-y-1" {...props} />
+  ),
+  ol: (props) => (
+    <ol className="mb-2 last:mb-0 list-decimal pl-5 space-y-1" {...props} />
+  ),
+  li: (props) => <li className="leading-relaxed" {...props} />,
+  h1: (props) => <h1 className="mb-2 text-base font-semibold" {...props} />,
+  h2: (props) => <h2 className="mb-2 text-base font-semibold" {...props} />,
+  h3: (props) => <h3 className="mb-1 text-sm font-semibold" {...props} />,
+  strong: (props) => <strong className="font-semibold" {...props} />,
+  em: (props) => <em className="italic" {...props} />,
+  a: (props) => (
+    <a
+      className="text-blue-300 underline hover:text-blue-200"
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    />
+  ),
+  code: ({ inline, ...props }) =>
+    inline ? (
+      <code
+        className="rounded bg-gray-800 px-1 py-0.5 text-[0.85em] font-mono"
+        {...props}
+      />
+    ) : (
+      <code className="font-mono text-[0.85em]" {...props} />
+    ),
+  pre: (props) => (
+    <pre
+      className="mb-2 last:mb-0 overflow-x-auto rounded bg-gray-800 p-2 text-[0.85em]"
+      {...props}
+    />
+  ),
+  blockquote: (props) => (
+    <blockquote
+      className="mb-2 last:mb-0 border-l-2 border-gray-500 pl-3 italic text-gray-300"
+      {...props}
+    />
+  ),
+  table: (props) => (
+    <div className="mb-2 last:mb-0 overflow-x-auto">
+      <table className="w-full border-collapse text-left" {...props} />
+    </div>
+  ),
+  th: (props) => (
+    <th className="border border-gray-600 px-2 py-1 font-semibold" {...props} />
+  ),
+  td: (props) => (
+    <td className="border border-gray-600 px-2 py-1" {...props} />
+  ),
+  hr: () => <hr className="my-2 border-gray-600" />,
+};
 
 const Chat = ({ isOpen }) => {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Hi! How can I help you manage your finances?",
+      content: t("chatWidget.greeting"),
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,7 +145,7 @@ const Chat = ({ isOpen }) => {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       const errorText =
-        error.response?.data?.error || "Sorry, I encountered an error.";
+        error.response?.data?.error || t("chatWidget.errorGeneric");
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: errorText },
@@ -97,19 +162,19 @@ const Chat = ({ isOpen }) => {
       <div className="flex flex-col h-full">
         <div className="bg-gray-800 px-4 py-3 flex items-center justify-between gap-2 border-b border-gray-700">
           <span className="text-sm font-semibold text-gray-300 whitespace-nowrap">
-            Assistant
+            {t("chatWidget.assistant")}
           </span>
           <div className="flex items-center gap-2 min-w-0">
             <select
               value={provider}
               onChange={handleProviderChange}
               className="bg-gray-700 text-gray-200 text-xs rounded-md px-2 py-1 max-w-[110px] focus:outline-none focus:ring-1 focus:ring-blue-500"
-              title="Provider"
+              title={t("chatWidget.provider")}
             >
               {providers.map((p) => (
                 <option key={p.name} value={p.name} disabled={!p.configured}>
                   {p.label}
-                  {!p.configured ? " (no key)" : ""}
+                  {!p.configured ? t("chatWidget.noKey") : ""}
                 </option>
               ))}
             </select>
@@ -118,7 +183,7 @@ const Chat = ({ isOpen }) => {
                 value={model}
                 onChange={handleModelChange}
                 className="bg-gray-700 text-gray-200 text-xs rounded-md px-2 py-1 max-w-[130px] focus:outline-none focus:ring-1 focus:ring-blue-500"
-                title="Model"
+                title={t("chatWidget.model")}
               >
                 {!currentProvider.models.includes(model) && model && (
                   <option value={model}>{model}</option>
@@ -134,9 +199,9 @@ const Chat = ({ isOpen }) => {
                 type="text"
                 value={model}
                 onChange={handleModelChange}
-                placeholder="model"
+                placeholder={t("chatWidget.modelPlaceholder")}
                 className="bg-gray-700 text-gray-200 text-xs rounded-md px-2 py-1 w-[110px] focus:outline-none focus:ring-1 focus:ring-blue-500"
-                title={currentProvider?.error || "Model name"}
+                title={currentProvider?.error || t("chatWidget.modelName")}
               />
             )}
           </div>
@@ -157,13 +222,22 @@ const Chat = ({ isOpen }) => {
               }`}
             >
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                className={`max-w-[80%] rounded-lg px-4 py-2 break-words ${
                   message.role === "user"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-700 text-gray-100"
                 }`}
               >
-                {message.content}
+                {message.role === "assistant" ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))}
@@ -185,7 +259,7 @@ const Chat = ({ isOpen }) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             className="flex-1 bg-gray-700 text-gray-100 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ask something about your finances..."
+            placeholder={t("chatWidget.inputPlaceholder")}
             disabled={isLoading}
             autoFocus
           />

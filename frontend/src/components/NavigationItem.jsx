@@ -1,7 +1,9 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const NavigationItem = ({ item }) => {
+  const { t } = useTranslation();
   return (
     <NavLink
       to={item?.path}
@@ -17,7 +19,7 @@ const NavigationItem = ({ item }) => {
       }
     >
       <FontAwesomeIcon icon={item?.icon} className="w-4" />
-      <span>{item?.name}</span>
+      <span>{item?.labelKey ? t(item.labelKey) : item?.name}</span>
     </NavLink>
   );
 };

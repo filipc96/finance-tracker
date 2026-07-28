@@ -1,4 +1,5 @@
 import { Component } from "react";
+import i18n from "../i18n";
 
 /**
  * Catches render errors from a chart subtree so one failing chart shows a
@@ -23,7 +24,7 @@ class ChartErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          This chart couldn’t be displayed.
+          {i18n.t("charts.chartError")}
         </p>
       );
     }

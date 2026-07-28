@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faKey, faCopy, faCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import Button from "./ui/Button";
@@ -8,6 +9,7 @@ import Button from "./ui/Button";
 // shown again, so we require an explicit "I saved it" acknowledgement before
 // continuing.
 const RecoveryKeyPanel = ({ recoveryKey, onContinue }) => {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
@@ -27,12 +29,8 @@ const RecoveryKeyPanel = ({ recoveryKey, onContinue }) => {
         <div className="rounded-xl bg-primary-600 p-3">
           <FontAwesomeIcon icon={faKey} className="text-2xl text-white" />
         </div>
-        <h2 className="!text-gray-900">Save your recovery key</h2>
-        <p className="text-sm text-gray-500">
-          This is the only way to regain access to your saved API keys if you
-          forget your password. Store it somewhere safe — it won't be shown
-          again.
-        </p>
+        <h2 className="!text-gray-900">{t("recovery.title")}</h2>
+        <p className="text-sm text-gray-500">{t("recovery.intro")}</p>
       </div>
 
       <div className="rounded-lg border border-gray-300 bg-gray-50 p-4">
@@ -48,7 +46,7 @@ const RecoveryKeyPanel = ({ recoveryKey, onContinue }) => {
           font-medium text-gray-700 hover:bg-gray-50"
       >
         <FontAwesomeIcon icon={copied ? faCheck : faCopy} />
-        {copied ? "Copied" : "Copy to clipboard"}
+        {copied ? t("recovery.copied") : t("recovery.copy")}
       </button>
 
       <label className="flex items-start gap-2 text-sm text-gray-700">
@@ -63,7 +61,7 @@ const RecoveryKeyPanel = ({ recoveryKey, onContinue }) => {
             icon={faTriangleExclamation}
             className="text-amber-500"
           />
-          I have saved my recovery key somewhere safe.
+          {t("recovery.acknowledge")}
         </span>
       </label>
 
@@ -73,7 +71,7 @@ const RecoveryKeyPanel = ({ recoveryKey, onContinue }) => {
         disabled={!acknowledged}
         className="w-full"
       >
-        Continue
+        {t("recovery.continue")}
       </Button>
     </div>
   );

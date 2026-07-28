@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Button from "../components/ui/Button";
 import { formatMoney } from "../utils/formatCurrency";
@@ -7,6 +8,7 @@ import { formatMoney } from "../utils/formatCurrency";
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 const BudgetBar = ({ budget, onDelete, onUpdate }) => {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(budget.amount);
 
@@ -40,13 +42,13 @@ const BudgetBar = ({ budget, onDelete, onUpdate }) => {
                 className="w-28 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800"
               />
               <button onClick={saveAmount} className="text-blue-600 text-sm">
-                Save
+                {t("common.save")}
               </button>
               <button
                 onClick={() => setEditing(false)}
                 className="text-gray-500 text-sm"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </>
           ) : (
@@ -58,13 +60,13 @@ const BudgetBar = ({ budget, onDelete, onUpdate }) => {
                 onClick={() => setEditing(true)}
                 className="text-blue-600 text-sm"
               >
-                Edit
+                {t("common.edit")}
               </button>
               <button
                 onClick={() => onDelete(budget.id)}
                 className="text-red-500 text-sm"
               >
-                Delete
+                {t("common.delete")}
               </button>
             </>
           )}
@@ -77,13 +79,15 @@ const BudgetBar = ({ budget, onDelete, onUpdate }) => {
         />
       </div>
       <div className="text-xs text-gray-500 dark:text-gray-400">
-        {percent}% used{percent >= 100 ? " — over budget!" : ""}
+        {t("budgets.used", { percent })}
+        {percent >= 100 ? t("budgets.overBudget") : ""}
       </div>
     </div>
   );
 };
 
 const Budgets = () => {
+  const { t } = useTranslation();
   const [month, setMonth] = useState(currentMonth());
   const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -94,7 +98,7 @@ const Budgets = () => {
     api
       .get(`/api/budgets/?month=${targetMonth}`)
       .then((res) => setBudgets(res.data))
-      .catch(() => toast.error("Failed to load budgets."));
+      .catch(() => toast.error(t("budgets.loadFailed")));
   };
 
   useEffect(() => {
@@ -103,7 +107,7 @@ const Budgets = () => {
       .then((res) =>
         setCategories(res.data.filter((c) => c.type === "expense"))
       )
-      .catch(() => toast.error("Failed to load categories."));
+      .catch(() => toast.error(t("budgets.loadCategoriesFailed")));
   }, []);
 
   useEffect(() => {
@@ -113,7 +117,7 @@ const Budgets = () => {
   const addBudget = (e) => {
     e.preventDefault();
     if (!categoryId || !amount) {
-      toast.error("Pick a category and amount.");
+      toast.error(t("budgets.pickCategoryAmount"));
       return;
     }
     api
@@ -123,7 +127,7 @@ const Budgets = () => {
         month: `${month}-01`,
       })
       .then(() => {
-        toast.success("Budget added.");
+        toast.success(t("budgets.added"));
         setCategoryId("");
         setAmount("");
         getBudgets();
@@ -133,7 +137,7 @@ const Budgets = () => {
         const message =
           data?.category?.[0] ||
           data?.non_field_errors?.[0] ||
-          "Failed to add budget.";
+          t("budgets.addFailed");
         toast.error(message);
       });
   };
@@ -142,30 +146,30 @@ const Budgets = () => {
     api
       .patch(`/api/budgets/${id}/`, { amount: newAmount })
       .then(() => {
-        toast.success("Budget updated.");
+        toast.success(t("budgets.updated"));
         getBudgets();
       })
-      .catch(() => toast.error("Failed to update budget."));
+      .catch(() => toast.error(t("budgets.updateFailed")));
   };
 
   const deleteBudget = (id) => {
     api
       .delete(`/api/budgets/${id}/`)
       .then(() => {
-        toast.success("Budget deleted.");
+        toast.success(t("budgets.deleted"));
         getBudgets();
       })
-      .catch(() => toast.error("Failed to delete budget."));
+      .catch(() => toast.error(t("budgets.deleteFailed")));
   };
 
   return (
     <>
-      <h2>Budgets</h2>
+      <h2>{t("budgets.title")}</h2>
 
       <div className="flex flex-col gap-8 py-6 max-w-3xl">
         <div className="flex items-center gap-4">
           <label className="text-sm text-gray-600 dark:text-gray-300">
-            Month
+            {t("budgets.month")}
           </label>
           <input
             type="month"
@@ -181,14 +185,14 @@ const Budgets = () => {
         >
           <div className="flex flex-col">
             <label className="text-sm mb-1 text-gray-600 dark:text-gray-300">
-              Category
+              {t("budgets.category")}
             </label>
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               className="px-3 py-2 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 min-w-[180px]"
             >
-              <option value="">Select category</option>
+              <option value="">{t("budgets.selectCategory")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -198,7 +202,7 @@ const Budgets = () => {
           </div>
           <div className="flex flex-col">
             <label className="text-sm mb-1 text-gray-600 dark:text-gray-300">
-              Monthly limit
+              {t("budgets.monthlyLimit")}
             </label>
             <input
               type="number"
@@ -210,14 +214,14 @@ const Budgets = () => {
             />
           </div>
           <Button type="submit" variant="secondary">
-            Add Budget
+            {t("budgets.addBudget")}
           </Button>
         </form>
 
         <div className="flex flex-col gap-4">
           {budgets.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400">
-              No budgets for this month yet.
+              {t("budgets.noBudgets")}
             </p>
           ) : (
             budgets.map((b) => (

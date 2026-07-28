@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
@@ -9,6 +10,7 @@ import Button from "./ui/Button";
 const NEW_PREFIX = "new:";
 
 const ScanReceipt = ({ callback, className = "max-w-md" }) => {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -23,7 +25,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
     api
       .get("/api/categories/")
       .then((response) => setCategories(response.data))
-      .catch(() => toast.error("Failed to load categories."));
+      .catch(() => toast.error(t("transaction.loadCategoriesFailed")));
 
   useEffect(() => {
     loadCategories();
@@ -82,7 +84,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
       } catch (error) {
         toast.error(
           `${file.name}: ${
-            error.response?.data?.error || "couldn't read that receipt."
+            error.response?.data?.error || t("receipt.readError")
           }`
         );
       } finally {
@@ -97,7 +99,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
     if (drafts.length === 0) return;
     for (const d of drafts) {
       if (!d.name || !d.amount || !d.date || !d.category) {
-        toast.error("Fill in every field on each receipt before saving.");
+        toast.error(t("receipt.fillAll"));
         return;
       }
     }
@@ -134,11 +136,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
         savedKeys.push(d.key);
       }
 
-      toast.success(
-        `Added ${savedKeys.length} expense${
-          savedKeys.length === 1 ? "" : "s"
-        } from receipts.`
-      );
+      toast.success(t("receipt.addedCount", { count: savedKeys.length }));
       reset();
       if (callback) callback();
     } catch {
@@ -146,7 +144,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
       setDrafts((prev) => prev.filter((d) => !savedKeys.includes(d.key)));
       await loadCategories();
       if (savedKeys.length && callback) callback();
-      toast.error("Some receipts couldn't be saved. Review the rest and retry.");
+      toast.error(t("receipt.saveError"));
     } finally {
       setIsSaving(false);
     }
@@ -154,7 +152,10 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
 
   const hasDrafts = drafts.length > 0;
   const progressLabel = isScanning
-    ? `Reading receipt ${Math.min(scanDone + 1, scanTotal)} of ${scanTotal}…`
+    ? t("receipt.reading", {
+        current: Math.min(scanDone + 1, scanTotal),
+        total: scanTotal,
+      })
     : "";
 
   return (
@@ -162,7 +163,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
       className={`flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full h-auto p-6 ${className}`}
     >
       <div className="flex flex-col gap-4">
-        <h3>Scan Receipts</h3>
+        <h3>{t("receipt.title")}</h3>
 
         <input
           ref={fileInput}
@@ -176,8 +177,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
         {!hasDrafts && (
           <>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Upload one or several receipt photos. Each is read on your machine
-              and turned into an expense you can review before saving.
+              {t("receipt.intro")}
             </p>
             <Button
               type="button"
@@ -186,7 +186,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
               className="w-full"
               onClick={() => fileInput.current?.click()}
             >
-              {isScanning ? progressLabel : "Choose receipt photos"}
+              {isScanning ? progressLabel : t("receipt.choosePhotos")}
             </Button>
           </>
         )}
@@ -223,20 +223,20 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
                       className="text-xs text-gray-400 hover:text-red-500"
                       onClick={() => removeDraft(d.key)}
                     >
-                      Remove
+                      {t("receipt.remove")}
                     </button>
                   </div>
 
                   {lowConfidence && (
                     <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                      Low confidence — double-check the amount and date.
+                      {t("receipt.lowConfidence")}
                     </p>
                   )}
 
                   <Input
-                    label="Description"
+                    label={t("receipt.description")}
                     type="text"
-                    placeholder="Merchant"
+                    placeholder={t("receipt.merchant")}
                     value={d.name}
                     onChange={(e) => updateDraft(d.key, { name: e.target.value })}
                     required
@@ -244,7 +244,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Input
-                      label="Amount"
+                      label={t("receipt.amount")}
                       type="number"
                       min="0"
                       step="0.01"
@@ -256,7 +256,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
                       required
                     />
                     <Input
-                      label="Date"
+                      label={t("receipt.date")}
                       type="date"
                       value={d.date}
                       onChange={(e) =>
@@ -267,16 +267,16 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
                   </div>
 
                   <Select
-                    label="Category"
+                    label={t("receipt.category")}
                     value={d.category}
                     onChange={(e) =>
                       updateDraft(d.key, { category: e.target.value })
                     }
                   >
-                    <option value="">Select category</option>
+                    <option value="">{t("transaction.selectCategory")}</option>
                     {showCreate && (
                       <option value={NEW_PREFIX + d.suggested}>
-                        + Create “{d.suggested}”
+                        {t("receipt.createCategory", { name: d.suggested })}
                       </option>
                     )}
                     {expenseCategories.map((c) => (
@@ -295,7 +295,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
               onClick={() => fileInput.current?.click()}
               disabled={isScanning || isSaving}
             >
-              + Add more photos
+              {t("receipt.addMore")}
             </button>
 
             <div className="flex gap-3">
@@ -306,7 +306,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
                 onClick={reset}
                 disabled={isSaving}
               >
-                Discard all
+                {t("receipt.discardAll")}
               </Button>
               <Button
                 type="button"
@@ -315,9 +315,7 @@ const ScanReceipt = ({ callback, className = "max-w-md" }) => {
                 className="flex-1"
                 onClick={saveAll}
               >
-                {`Save ${drafts.length} expense${
-                  drafts.length === 1 ? "" : "s"
-                }`}
+                {t("receipt.saveCount", { count: drafts.length })}
               </Button>
             </div>
           </div>

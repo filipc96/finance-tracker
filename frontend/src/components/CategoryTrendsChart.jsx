@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Line } from "react-chartjs-2";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import { useTheme } from "../contexts/ThemeContext";
 import {
@@ -11,6 +12,7 @@ import ChartHeader from "./ui/ChartHeader";
 import ChartSelect from "./ui/ChartSelect";
 
 const CategoryTrendsChart = () => {
+  const { t } = useTranslation();
   const { darkMode } = useTheme();
   const [type, setType] = useState("expense");
   const [months, setMonths] = useState(6);
@@ -36,23 +38,23 @@ const CategoryTrendsChart = () => {
 
   return (
     <>
-      <ChartHeader title="Category trends">
+      <ChartHeader title={t("charts.categoryTrends")}>
         <ChartSelect value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="expense">Expenses</option>
-          <option value="income">Income</option>
+          <option value="expense">{t("chart.expenses")}</option>
+          <option value="income">{t("chart.income")}</option>
         </ChartSelect>
         <ChartSelect
           value={months}
           onChange={(e) => setMonths(Number(e.target.value))}
         >
-          <option value={6}>Last 6 months</option>
-          <option value={12}>Last 12 months</option>
-          <option value={24}>Last 24 months</option>
+          <option value={6}>{t("charts.last6Months")}</option>
+          <option value={12}>{t("charts.last12Months")}</option>
+          <option value={24}>{t("charts.last24Months")}</option>
         </ChartSelect>
       </ChartHeader>
       {trends.categories.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          No transactions in this window.
+          {t("charts.noTransactionsWindow")}
         </p>
       ) : (
         <div className="relative h-80">

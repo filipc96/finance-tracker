@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
@@ -18,6 +19,7 @@ const Form = ({
   footer,
   onForgotPassword,
 }) => {
+  const { t } = useTranslation();
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
   // Base currency is chosen once at registration and then locked (it's the
@@ -52,13 +54,13 @@ const Form = ({
     } catch (error) {
       const status = error.response?.status;
       if (status === 401) {
-        setErrorMsg("Wrong username or password.");
+        setErrorMsg(t("auth.errWrongCredentials"));
       } else if (status === 400 && error.response?.data?.username) {
         setErrorMsg(error.response.data.username[0]);
       } else if (status === 400 && error.response?.data?.password) {
         setErrorMsg(error.response.data.password[0]);
       } else {
-        setErrorMsg("Something went wrong. Try again.");
+        setErrorMsg(t("auth.errGeneric"));
       }
     } finally {
       setLoading(false);
@@ -84,14 +86,16 @@ const Form = ({
               </div>
               <span className="logo-text text-xl font-bold">Fintrax</span>
               <h2 className="!text-gray-900">
-                {method == "login" ? "Welcome back" : "Create your account"}
+                {method == "login"
+                  ? t("auth.welcomeBack")
+                  : t("auth.createAccount")}
               </h2>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">
-                  Username
+                  {t("auth.username")}
                 </label>
                 <div className="relative">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
@@ -104,7 +108,7 @@ const Form = ({
                       disabled:opacity-70"
                     onChange={(e) => setUsername(e.target.value)}
                     value={username}
-                    placeholder="Your username"
+                    placeholder={t("auth.usernamePlaceholder")}
                     disabled={lockUsername}
                     required
                   />
@@ -112,17 +116,17 @@ const Form = ({
               </div>
 
               <PasswordInput
-                label="Password"
+                label={t("auth.password")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your password"
+                placeholder={t("auth.passwordPlaceholder")}
                 required
               />
 
               {method != "login" && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-gray-700">
-                    Base Currency
+                    {t("auth.baseCurrency")}
                   </label>
                   <select
                     value={baseCurrency}
@@ -137,8 +141,7 @@ const Form = ({
                     ))}
                   </select>
                   <p className="text-xs text-gray-500">
-                    This can't be changed later — it's the currency your balance
-                    is kept in. You can still view amounts in other currencies.
+                    {t("auth.baseCurrencyNote")}
                   </p>
                 </div>
               )}
@@ -149,7 +152,7 @@ const Form = ({
                   onClick={onForgotPassword}
                   className="-mt-2 self-end text-xs font-medium text-primary-600 hover:text-primary-700"
                 >
-                  Forgot password?
+                  {t("auth.forgotPassword")}
                 </button>
               )}
 
@@ -160,7 +163,7 @@ const Form = ({
               )}
 
               <Button type="submit" isLoading={loading} className="w-full">
-                {method == "login" ? "Sign in" : "Sign up"}
+                {method == "login" ? t("auth.signIn") : t("auth.signUp")}
               </Button>
             </form>
 
@@ -170,22 +173,22 @@ const Form = ({
               <div className="mt-6 text-center text-sm text-gray-500">
                 {method == "login" ? (
                   <>
-                    {`Don't have an account? `}
+                    {`${t("auth.noAccount")} `}
                     <Link
                       to="/register"
                       className="font-semibold text-primary-600 hover:text-primary-700"
                     >
-                      Sign up for free
+                      {t("auth.signUpFree")}
                     </Link>
                   </>
                 ) : (
                   <>
-                    Already have an account?{" "}
+                    {t("auth.haveAccount")}{" "}
                     <Link
                       to="/login"
                       className="font-semibold text-primary-600 hover:text-primary-700"
                     >
-                      Sign in
+                      {t("auth.signIn")}
                     </Link>
                   </>
                 )}

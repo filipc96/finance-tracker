@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
@@ -12,6 +13,7 @@ import { useCurrency } from "../contexts/CurrencyContext";
 // category/frequency/next_due changes take effect on the next materialization
 // run.
 const EditRecurringModal = ({ item, onClose, onUpdated }) => {
+  const { t } = useTranslation();
   const { baseCurrency } = useCurrency();
   const [categories, setCategories] = useState([]);
   const [name, setName] = useState(item.name);
@@ -26,7 +28,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
     api
       .get("/api/categories/")
       .then((res) => setCategories(res.data))
-      .catch(() => toast.error("Failed to load categories."));
+      .catch(() => toast.error(t("transaction.loadCategoriesFailed")));
   }, []);
 
   const categoryOptions = categories
@@ -40,7 +42,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
   const save = (e) => {
     e.preventDefault();
     if (!(name && amount && category && nextDue)) {
-      toast.error("You can't leave the fields empty!");
+      toast.error(t("transaction.emptyFields"));
       return;
     }
     setIsSaving(true);
@@ -55,7 +57,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
         type: item.type,
       })
       .then(() => {
-        toast.success("Recurring transaction updated.");
+        toast.success(t("editRecurring.updated"));
         onUpdated();
         onClose();
       })
@@ -64,7 +66,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
           err.response?.data?.amount?.[0] ||
             err.response?.data?.category?.[0] ||
             err.response?.data?.non_field_errors?.[0] ||
-            "Failed to update recurring transaction."
+            t("recurring.updateFailed")
         )
       )
       .finally(() => setIsSaving(false));
@@ -80,10 +82,14 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <form onSubmit={save} className="flex flex-col gap-4">
-          <h3>Edit recurring {item.type === "expense" ? "expense" : "income"}</h3>
+          <h3>
+            {item.type === "expense"
+              ? t("editRecurring.editExpense")
+              : t("editRecurring.editIncome")}
+          </h3>
 
           <Input
-            label="Name"
+            label={t("editRecurring.name")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -91,7 +97,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
-              label="Amount"
+              label={t("editRecurring.amount")}
               type="number"
               min="0"
               step="0.01"
@@ -100,37 +106,37 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
               required
             />
             <Select
-              label="Currency"
+              label={t("editRecurring.currency")}
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
             >
               {CURRENCY_OPTIONS.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.code} — {c.label}
-                  {c.code === baseCurrency ? " (base)" : ""}
+                  {c.code === baseCurrency ? t("settings.baseSuffix") : ""}
                 </option>
               ))}
             </Select>
             <Select
-              label="Category"
+              label={t("editRecurring.category")}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              <option value="">Select category</option>
+              <option value="">{t("editRecurring.selectCategory")}</option>
               {categoryOptions}
             </Select>
             <Select
-              label="Frequency"
+              label={t("editRecurring.frequency")}
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
             >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
+              <option value="daily">{t("recurring.freqDaily")}</option>
+              <option value="weekly">{t("recurring.freqWeekly")}</option>
+              <option value="monthly">{t("recurring.freqMonthly")}</option>
+              <option value="yearly">{t("recurring.freqYearly")}</option>
             </Select>
             <Input
-              label="Next due"
+              label={t("editRecurring.nextDue")}
               type="date"
               value={nextDue}
               onChange={(e) => setNextDue(e.target.value)}
@@ -140,7 +146,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
 
           <div className="flex justify-end gap-3 mt-1">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               type="submit"
@@ -148,7 +154,7 @@ const EditRecurringModal = ({ item, onClose, onUpdated }) => {
               size="sm"
               isLoading={isSaving}
             >
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </form>

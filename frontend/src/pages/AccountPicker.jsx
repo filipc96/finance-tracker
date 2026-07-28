@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Form from "../components/Form";
 import Button from "../components/ui/Button";
@@ -20,6 +21,7 @@ import {
 // Modes: pick (tiles) -> password (unlock a chosen account) | register (new) |
 // recover (forgot password, reset with the recovery key).
 const AccountPicker = () => {
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState(null); // null = loading
   const [mode, setMode] = useState("pick");
   const [selected, setSelected] = useState("");
@@ -55,7 +57,7 @@ const AccountPicker = () => {
             className="mt-6 flex w-full items-center justify-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700"
           >
             <FontAwesomeIcon icon={faArrowLeft} />
-            Choose a different account
+            {t("accountPicker.chooseDifferent")}
           </button>
         }
       />
@@ -75,7 +77,7 @@ const AccountPicker = () => {
               className="mt-6 flex w-full items-center justify-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700"
             >
               <FontAwesomeIcon icon={faArrowLeft} />
-              Back to accounts
+              {t("accountPicker.backToAccounts")}
             </button>
           ) : null
         }
@@ -98,12 +100,14 @@ const AccountPicker = () => {
             <FontAwesomeIcon icon={faWallet} className="text-2xl text-white" />
           </div>
           <span className="logo-text text-xl font-bold">Fintrax</span>
-          <h2 className="!text-gray-900">Choose an account</h2>
+          <h2 className="!text-gray-900">{t("accountPicker.chooseAccount")}</h2>
         </div>
 
         <div className="flex flex-col gap-2">
           {accounts === null ? (
-            <p className="text-center text-sm text-gray-500">Loading…</p>
+            <p className="text-center text-sm text-gray-500">
+              {t("common.loading")}
+            </p>
           ) : (
             accounts.map((acc) => (
               <button
@@ -134,7 +138,7 @@ const AccountPicker = () => {
             border-gray-300 py-3 text-sm font-medium text-gray-600 hover:border-primary-400 hover:text-primary-600"
         >
           <FontAwesomeIcon icon={faPlus} />
-          New account
+          {t("accountPicker.newAccount")}
         </button>
       </div>
     </div>
@@ -144,6 +148,7 @@ const AccountPicker = () => {
 // Forgotten-password reset using the one-time recovery key. Resets both the
 // vault's password wrapping and the Django auth password; no data is lost.
 const RecoverForm = ({ username, onDone, onBack }) => {
+  const { t } = useTranslation();
   const [name, setName] = useState(username || "");
   const [recoveryKey, setRecoveryKey] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -163,9 +168,7 @@ const RecoverForm = ({ username, onDone, onBack }) => {
       });
       setDone(true);
     } catch (error) {
-      setErrorMsg(
-        error.response?.data?.error || "Something went wrong. Try again."
-      );
+      setErrorMsg(error.response?.data?.error || t("auth.errGeneric"));
     } finally {
       setLoading(false);
     }
@@ -178,26 +181,26 @@ const RecoverForm = ({ username, onDone, onBack }) => {
           <div className="rounded-xl bg-primary-600 p-3">
             <FontAwesomeIcon icon={faKey} className="text-2xl text-white" />
           </div>
-          <h2 className="!text-gray-900">Reset your password</h2>
+          <h2 className="!text-gray-900">{t("accountPicker.resetTitle")}</h2>
           <p className="text-center text-sm text-gray-500">
-            Enter the recovery key you saved when you created this account.
+            {t("accountPicker.resetIntro")}
           </p>
         </div>
 
         {done ? (
           <div className="flex flex-col gap-5">
             <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-              Password reset. You can now sign in with your new password.
+              {t("accountPicker.passwordReset")}
             </p>
             <Button type="button" onClick={onDone} className="w-full">
-              Back to sign in
+              {t("accountPicker.backToSignIn")}
             </Button>
           </div>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                Username
+                {t("accountPicker.username")}
               </label>
               <input
                 type="text"
@@ -205,14 +208,14 @@ const RecoverForm = ({ username, onDone, onBack }) => {
                   placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your username"
+                placeholder={t("auth.usernamePlaceholder")}
                 required
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
-                Recovery key
+                {t("accountPicker.recoveryKey")}
               </label>
               <textarea
                 className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 px-3.5 font-mono text-sm text-gray-900
@@ -220,16 +223,16 @@ const RecoverForm = ({ username, onDone, onBack }) => {
                 rows={2}
                 value={recoveryKey}
                 onChange={(e) => setRecoveryKey(e.target.value)}
-                placeholder="xxxxxxxx xxxxxxxx …"
+                placeholder={t("accountPicker.recoveryKeyPlaceholder")}
                 required
               />
             </div>
 
             <PasswordInput
-              label="New password"
+              label={t("accountPicker.newPassword")}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Choose a new password"
+              placeholder={t("accountPicker.newPasswordPlaceholder")}
               required
             />
 
@@ -240,7 +243,7 @@ const RecoverForm = ({ username, onDone, onBack }) => {
             )}
 
             <Button type="submit" isLoading={loading} className="w-full">
-              Reset password
+              {t("accountPicker.resetPassword")}
             </Button>
 
             <button
@@ -249,7 +252,7 @@ const RecoverForm = ({ username, onDone, onBack }) => {
               className="flex w-full items-center justify-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700"
             >
               <FontAwesomeIcon icon={faArrowLeft} />
-              Back to accounts
+              {t("accountPicker.backToAccounts")}
             </button>
           </form>
         )}

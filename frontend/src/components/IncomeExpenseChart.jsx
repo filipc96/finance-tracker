@@ -1,5 +1,6 @@
 import { Chart as ChartJS, BarElement } from "chart.js";
 import { Chart } from "react-chartjs-2";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../contexts/ThemeContext";
 import { useCurrency } from "../contexts/CurrencyContext";
 import {
@@ -12,31 +13,17 @@ import ChartSelect from "./ui/ChartSelect";
 
 ChartJS.register(BarElement);
 
-const MONTH_LABELS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sept",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
 const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
+  const { t } = useTranslation();
   const { darkMode } = useTheme();
   const { displayCurrency, displayRate } = useCurrency();
 
   const data = {
-    labels: MONTH_LABELS,
+    labels: t("common.monthsShort", { returnObjects: true }),
     datasets: [
       {
         type: "bar",
-        label: "Income",
+        label: t("chart.income"),
         data: summary?.income || [],
         backgroundColor: withAlpha(CHART_COLORS.income, 0.85),
         borderRadius: 4,
@@ -44,7 +31,7 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
       },
       {
         type: "bar",
-        label: "Expense",
+        label: t("history.expense"),
         data: summary?.expense || [],
         backgroundColor: withAlpha(CHART_COLORS.expense, 0.85),
         borderRadius: 4,
@@ -52,7 +39,7 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
       },
       {
         type: "line",
-        label: "Net",
+        label: t("charts.net"),
         data: summary?.net || [],
         borderColor: CHART_COLORS.net,
         backgroundColor: withAlpha(CHART_COLORS.net, 0.12),
@@ -69,7 +56,7 @@ const IncomeExpenseChart = ({ summary, year, onYearChange }) => {
 
   return (
     <>
-      <ChartHeader title="Income vs expenses">
+      <ChartHeader title={t("charts.incomeVsExpenses")}>
         <ChartSelect
           value={year}
           onChange={(e) => onYearChange(Number(e.target.value))}

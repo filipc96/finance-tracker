@@ -1,11 +1,13 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Input from "./ui/Input";
 import Select from "./ui/Select";
 import Button from "./ui/Button";
 
 const AddCategory = ({ callback }) => {
+  const { t } = useTranslation();
   const [categoryName, setCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -17,39 +19,39 @@ const AddCategory = ({ callback }) => {
       api
         .post("/api/categories/", { name: categoryName, type: categoryType })
         .then(() => {
-          toast.success("Category created.");
+          toast.success(t("addCategory.created"));
           setCategoryName("");
           if (callback) callback();
         })
-        .catch(() => toast.error("Failed to create category."))
+        .catch(() => toast.error(t("addCategory.createFailed")))
         .finally(() => setIsSaving(false));
     } else {
-      toast.error("You can't leave the category name or type empty!");
+      toast.error(t("addCategory.emptyFields"));
     }
   };
 
   return (
     <div className="flex flex-col rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm w-full max-w-md h-auto p-6">
       <form onSubmit={addCategory} className="flex flex-col gap-4">
-        <h3>Add Category</h3>
+        <h3>{t("addCategory.title")}</h3>
 
         <Input
-          label="Category Name"
+          label={t("addCategory.name")}
           type="text"
-          placeholder="Type category name"
+          placeholder={t("addCategory.namePlaceholder")}
           required
           value={categoryName}
           onChange={(e) => setCategoryName(e.target.value)}
         />
 
         <Select
-          label="Category Type"
+          label={t("addCategory.type")}
           value={categoryType}
           onChange={(e) => setCategoryType(e.target.value)}
         >
-          <option value="">Select category type</option>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
+          <option value="">{t("addCategory.selectType")}</option>
+          <option value="expense">{t("history.expense")}</option>
+          <option value="income">{t("chart.income")}</option>
         </Select>
 
         <Button
@@ -58,7 +60,7 @@ const AddCategory = ({ callback }) => {
           isLoading={isSaving}
           className="w-full mt-1"
         >
-          Add Category
+          {t("addCategory.title")}
         </Button>
       </form>
     </div>

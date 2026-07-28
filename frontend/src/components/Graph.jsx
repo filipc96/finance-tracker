@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -28,6 +29,7 @@ ChartJS.register(
 );
 
 const Graph = () => {
+  const { t } = useTranslation();
   const { darkMode } = useTheme();
   const { displayCurrency, displayRate } = useCurrency();
   const [timespan, setTimespan] = useState(6);
@@ -81,7 +83,7 @@ const Graph = () => {
   const chartData = {
     labels: getAllLabels(),
     datasets: transactionTypes.map((type) => ({
-      label: type.charAt(0).toUpperCase() + type.slice(1),
+      label: type === "expense" ? t("history.expense") : t("chart.income"),
       data: getAllLabels().map((label) => {
         const entry = data[type]?.find((item) => item.month === label);
         return entry ? entry.total : 0;
@@ -105,25 +107,27 @@ const Graph = () => {
 
   return (
     <>
-      <ChartHeader title="Transactions over time">
+      <ChartHeader title={t("charts.transactionsOverTime")}>
         <ChartSelect
           value={transactionTypes.length > 1 ? "all" : transactionTypes[0]}
           onChange={handleTypeChange}
         >
-          <option value="all">All transactions</option>
-          <option value="expense">Expenses</option>
-          <option value="income">Income</option>
+          <option value="all">{t("charts.allTransactions")}</option>
+          <option value="expense">{t("chart.expenses")}</option>
+          <option value="income">{t("chart.income")}</option>
         </ChartSelect>
         <ChartSelect value={timespan} onChange={handleTimespanChange}>
-          <option value={6}>Last 6 months</option>
-          <option value={12}>Last 12 months</option>
-          <option value={24}>Last 24 months</option>
+          <option value={6}>{t("charts.last6Months")}</option>
+          <option value={12}>{t("charts.last12Months")}</option>
+          <option value={24}>{t("charts.last24Months")}</option>
         </ChartSelect>
       </ChartHeader>
 
       {loading && Object.keys(data).length === 0 ? (
         <div className="flex h-96 items-center justify-center">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t("common.loading")}
+          </p>
         </div>
       ) : (
         <div className="relative h-96">

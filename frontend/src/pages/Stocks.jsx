@@ -1,30 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import DataTable from "../components/ui/DataTable";
 import { formatAmount } from "../utils/formatCurrency";
 
-const positionColumns = [
-  { key: "name", header: "Name", sortable: true, cellClassName: "font-medium" },
+const buildPositionColumns = (t) => [
+  { key: "name", header: t("stocks.colName"), sortable: true, cellClassName: "font-medium" },
   {
     key: "ticker",
-    header: "Ticker",
+    header: t("stocks.colTicker"),
     sortable: true,
     cellClassName: "text-gray-500 dark:text-gray-400",
   },
   {
     key: "quantity",
-    header: "Qty",
+    header: t("stocks.colQty"),
     align: "right",
     sortable: true,
     sortType: "number",
   },
   {
     key: "average_price",
-    header: "Avg price",
+    header: t("stocks.colAvgPrice"),
     align: "right",
     sortable: true,
     sortType: "number",
@@ -32,7 +33,7 @@ const positionColumns = [
   },
   {
     key: "current_price",
-    header: "Current",
+    header: t("stocks.colCurrent"),
     align: "right",
     sortable: true,
     sortType: "number",
@@ -40,7 +41,7 @@ const positionColumns = [
   },
   {
     key: "value",
-    header: "Value",
+    header: t("stocks.colValue"),
     align: "right",
     sortable: true,
     sortType: "number",
@@ -48,7 +49,7 @@ const positionColumns = [
   },
   {
     key: "unrealized_pl",
-    header: "P/L",
+    header: t("stocks.colPl"),
     align: "right",
     sortable: true,
     sortType: "number",
@@ -84,10 +85,12 @@ const SummaryCard = ({ label, value, colored }) => {
 };
 
 const Stocks = () => {
+  const { t } = useTranslation();
   const [portfolio, setPortfolio] = useState(null);
   const [loading, setLoading] = useState(true);
   const [needsCredentials, setNeedsCredentials] = useState(false);
   const [search, setSearch] = useState("");
+  const positionColumns = buildPositionColumns(t);
 
   const getPortfolio = (refresh = false) => {
     setLoading(true);
@@ -106,7 +109,7 @@ const Stocks = () => {
         ) {
           setNeedsCredentials(true);
         } else {
-          toast.error(message || "Failed to load portfolio.");
+          toast.error(message || t("stocks.loadFailed"));
         }
       })
       .finally(() => setLoading(false));
@@ -130,13 +133,12 @@ const Stocks = () => {
   if (needsCredentials) {
     return (
       <>
-        <h2>Stocks</h2>
+        <h2>{t("stocks.title")}</h2>
         <div className="py-6 max-w-xl">
           <p className="text-gray-600 dark:text-gray-300">
-            No Trading 212 API credentials configured. Generate an API key in
-            the Trading 212 app (Settings → API) and add it on the{" "}
+            {t("stocks.needCredentials")}
             <Link to="/settings" className="text-blue-600 underline">
-              Settings page
+              {t("stocks.settingsPage")}
             </Link>
             .
           </p>
@@ -147,7 +149,7 @@ const Stocks = () => {
 
   return (
     <>
-      <h2>Stocks</h2>
+      <h2>{t("stocks.title")}</h2>
 
       <div className="flex flex-col gap-6 py-6">
         <div className="flex items-center gap-4">
@@ -157,12 +159,14 @@ const Stocks = () => {
             onClick={() => getPortfolio(true)}
             isLoading={loading}
           >
-            Refresh
+            {t("stocks.refresh")}
           </Button>
           {portfolio && (
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              as of {new Date(portfolio.fetched_at).toLocaleString()}
-              {portfolio.stale ? " (cached)" : ""}
+              {t("stocks.asOf", {
+                time: new Date(portfolio.fetched_at).toLocaleString(),
+              })}
+              {portfolio.stale ? t("stocks.cached") : ""}
             </span>
           )}
         </div>
@@ -171,13 +175,16 @@ const Stocks = () => {
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl">
               <SummaryCard
-                label={`Total value ${portfolio.currency}`}
+                label={t("stocks.totalValue", { currency: portfolio.currency })}
                 value={portfolio.total_value}
               />
-              <SummaryCard label="Cash" value={portfolio.cash} />
-              <SummaryCard label="Invested" value={portfolio.invested} />
+              <SummaryCard label={t("stocks.cash")} value={portfolio.cash} />
               <SummaryCard
-                label="Unrealized P/L"
+                label={t("stocks.invested")}
+                value={portfolio.invested}
+              />
+              <SummaryCard
+                label={t("stocks.unrealizedPl")}
                 value={portfolio.unrealized_pl}
                 colored
               />
@@ -185,12 +192,12 @@ const Stocks = () => {
 
             {portfolio.positions.length === 0 ? (
               <p className="text-gray-500 dark:text-gray-400">
-                No open positions.
+                {t("stocks.noOpenPositions")}
               </p>
             ) : (
               <div className="flex flex-col gap-3">
                 <Input
-                  placeholder="Search name or ticker…"
+                  placeholder={t("stocks.searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-64"
@@ -199,7 +206,7 @@ const Stocks = () => {
                   columns={positionColumns}
                   rows={visiblePositions}
                   getRowKey={(p) => p.ticker}
-                  emptyMessage="No positions match."
+                  emptyMessage={t("stocks.noPositionsMatch")}
                 />
               </div>
             )}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 import { Pie } from "react-chartjs-2";
 import {
@@ -17,6 +18,7 @@ import { buildPieOptions, getChartTheme, PIE_PALETTE } from "../utils/chartTheme
 ChartJS.register(CategoryScale, LinearScale, ArcElement, Title, Tooltip, Legend);
 
 const PieChart = ({ type }) => {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
   const { darkMode } = useTheme();
   const { displayCurrency, displayRate } = useCurrency();
@@ -40,7 +42,9 @@ const PieChart = ({ type }) => {
     return (
       <div className="flex h-72 items-center justify-center">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          No {type} categories with activity yet.
+          {type === "expense"
+            ? t("charts.noExpenseActivity")
+            : t("charts.noIncomeActivity")}
         </p>
       </div>
     );
@@ -50,7 +54,7 @@ const PieChart = ({ type }) => {
     labels: categories.map((item) => item.name),
     datasets: [
       {
-        label: "Sums by category",
+        label: t("charts.sumsByCategory"),
         data: categories.map((item) => item.transactions_sum),
         backgroundColor: PIE_PALETTE,
         borderColor: pieBorderColor,

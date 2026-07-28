@@ -50,6 +50,10 @@ class Settings(models.Model):
     # Purely a view preference — amounts are converted base->display at render
     # time (frontend) and never rewritten, so switching it is non-destructive.
     display_currency = models.CharField(max_length=3, blank=True, default="")
+    # UI language for the frontend. Presentational only (no effect on stored
+    # data); the SPA reads it on load and mirrors it into localStorage. Codes:
+    # en, sr-Latn, sr-Cyrl, de, es, ru. Defaults to English.
+    language = models.CharField(max_length=10, default="en")
     open_ai_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
     anthropic_api_key = EncryptedCharField(max_length=500, blank=True, null=True)
     ollama_base_url = models.CharField(max_length=255, blank=True)

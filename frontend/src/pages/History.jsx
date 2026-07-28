@@ -1,6 +1,5 @@
 import AddTransaction from "../components/AddTransaction";
 import EditTransactionModal from "../components/EditTransactionModal";
-import RecurringManager from "../components/RecurringManager";
 import TransactionTable from "../components/TransactionsTable";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
@@ -8,6 +7,10 @@ import Select from "../components/ui/Select";
 import api from "../api";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { faRotate } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 const EMPTY_FILTERS = {
   search: "",
@@ -20,6 +23,8 @@ const EMPTY_FILTERS = {
 };
 
 const History = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [transactions, setTransactions] = useState([]);
   const [page, setPage] = useState(1);
@@ -63,7 +68,7 @@ const History = () => {
           // Page no longer exists (e.g. deleted last item on last page)
           getTransactions(1, activeFilters);
         } else {
-          toast.error("Failed to load transactions.");
+          toast.error(t("history.loadFailed"));
         }
       });
   };
@@ -87,10 +92,10 @@ const History = () => {
     api
       .delete(`/api/transactions/delete/${id}`)
       .then(() => {
-        toast.success("Transaction deleted.");
+        toast.success(t("history.deleted"));
         getTransactions();
       })
-      .catch(() => toast.error("Failed to delete transaction."));
+      .catch(() => toast.error(t("history.deleteFailed")));
   };
 
   const exportCSV = () => {
@@ -104,7 +109,7 @@ const History = () => {
         link.click();
         URL.revokeObjectURL(url);
       })
-      .catch(() => toast.error("Failed to export transactions."));
+      .catch(() => toast.error(t("history.exportFailed")));
   };
 
   const importCSV = (e) => {
@@ -120,17 +125,20 @@ const History = () => {
       })
       .then((res) => {
         const { created, errors } = res.data;
-        toast.success(`Imported ${created} transaction${created === 1 ? "" : "s"}.`);
+        toast.success(t("history.imported", { count: created }));
         if (errors.length > 0) {
           toast.error(
-            `${errors.length} row${errors.length === 1 ? "" : "s"} skipped ` +
-              `(first: row ${errors[0].row} — ${errors[0].error})`
+            t("history.rowsSkipped", {
+              count: errors.length,
+              row: errors[0].row,
+              error: errors[0].error,
+            })
           );
         }
         getTransactions(1);
       })
       .catch((error) =>
-        toast.error(error.response?.data?.error || "Failed to import CSV.")
+        toast.error(error.response?.data?.error || t("history.importFailed"))
       );
   };
 
@@ -145,7 +153,7 @@ const History = () => {
 
   return (
     <>
-      <h2>History</h2>
+      <h2>{t("history.title")}</h2>
 
       <div className="flex flex-col space-y-8 py-6 justify-center items-center">
         <div className="flex space-x-8 py-6">
@@ -162,19 +170,29 @@ const History = () => {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => navigate("/recurring")}
+          >
+            <FontAwesomeIcon icon={faRotate} />
+            {t("history.recurring")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowFilters((s) => !s)}
           >
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            {activeFilterCount > 0
+              ? t("history.filtersCount", { count: activeFilterCount })
+              : t("history.filters")}
           </Button>
           <Button variant="ghost" size="sm" onClick={exportCSV}>
-            Export CSV
+            {t("history.exportCsv")}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
           >
-            Import CSV
+            {t("history.importCsv")}
           </Button>
           <input
             ref={fileInputRef}
@@ -196,26 +214,26 @@ const History = () => {
             >
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Input
-                  label="Search"
-                  placeholder="Name contains…"
+                  label={t("history.search")}
+                  placeholder={t("history.searchPlaceholder")}
                   value={filters.search}
                   onChange={(e) => setFilter("search", e.target.value)}
                 />
                 <Select
-                  label="Type"
+                  label={t("history.type")}
                   value={filters.type}
                   onChange={(e) => setFilter("type", e.target.value)}
                 >
-                  <option value="">All types</option>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
+                  <option value="">{t("history.allTypes")}</option>
+                  <option value="income">{t("chart.income")}</option>
+                  <option value="expense">{t("history.expense")}</option>
                 </Select>
                 <Select
-                  label="Category"
+                  label={t("history.category")}
                   value={filters.category}
                   onChange={(e) => setFilter("category", e.target.value)}
                 >
-                  <option value="">All categories</option>
+                  <option value="">{t("history.allCategories")}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -223,19 +241,19 @@ const History = () => {
                   ))}
                 </Select>
                 <Input
-                  label="From date"
+                  label={t("history.fromDate")}
                   type="date"
                   value={filters.date_from}
                   onChange={(e) => setFilter("date_from", e.target.value)}
                 />
                 <Input
-                  label="To date"
+                  label={t("history.toDate")}
                   type="date"
                   value={filters.date_to}
                   onChange={(e) => setFilter("date_to", e.target.value)}
                 />
                 <Input
-                  label="Min amount"
+                  label={t("history.minAmount")}
                   type="number"
                   step="0.01"
                   min="0"
@@ -244,7 +262,7 @@ const History = () => {
                   onChange={(e) => setFilter("min_amount", e.target.value)}
                 />
                 <Input
-                  label="Max amount"
+                  label={t("history.maxAmount")}
                   type="number"
                   step="0.01"
                   min="0"
@@ -261,10 +279,10 @@ const History = () => {
                   onClick={clearFilters}
                   disabled={activeFilterCount === 0}
                 >
-                  Clear
+                  {t("history.clear")}
                 </Button>
                 <Button type="submit" variant="primary" size="sm">
-                  Apply
+                  {t("history.apply")}
                 </Button>
               </div>
             </form>
@@ -274,8 +292,8 @@ const History = () => {
         <div className="w-full">
           <div className="flex justify-between items-center pb-2 text-sm text-gray-600 dark:text-gray-300">
             <span>
-              {count} transaction{count === 1 ? "" : "s"}
-              {activeFilterCount > 0 ? " (filtered)" : ""}
+              {t("history.countTransactions", { count })}
+              {activeFilterCount > 0 ? t("history.filteredSuffix") : ""}
             </span>
           </div>
           <TransactionTable
@@ -293,10 +311,10 @@ const History = () => {
                 onClick={() => getTransactions(page - 1)}
                 disabled={page <= 1}
               >
-                Prev
+                {t("history.prev")}
               </Button>
               <span className="text-sm text-gray-600 dark:text-gray-300">
-                Page {page} of {totalPages}
+                {t("history.pageOf", { page, total: totalPages })}
               </span>
               <Button
                 variant="ghost"
@@ -304,12 +322,11 @@ const History = () => {
                 onClick={() => getTransactions(page + 1)}
                 disabled={!hasNext}
               >
-                Next
+                {t("history.next")}
               </Button>
             </div>
           )}
-        </div>{" "}
-        <RecurringManager onMaterialized={() => getTransactions()} />
+        </div>
       </div>
 
       {editing && (

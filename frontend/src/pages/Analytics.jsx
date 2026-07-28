@@ -18,22 +18,24 @@ import ChartSelect from "../components/ui/ChartSelect";
 import Card from "../components/ui/Card";
 import { formatWhole } from "../utils/formatCurrency";
 import { useCurrency } from "../contexts/CurrencyContext";
+import { useTranslation } from "react-i18next";
 import api from "../api";
 
 // Selectable rolling windows for the single Analytics filter. `value` matches the
-// backend PeriodSummary.PERIOD_DAYS keys; `subtext` is the "last …" phrasing shown
-// under each card.
+// backend PeriodSummary.PERIOD_DAYS keys; `labelKey`/`subtextKey` point at the
+// translated label + "last …" phrasing shown under each card.
 const PERIOD_OPTIONS = [
-  { value: "day", label: "Day", subtext: "last day" },
-  { value: "week", label: "Week", subtext: "last week" },
-  { value: "month", label: "Month", subtext: "last month" },
-  { value: "3m", label: "3 Months", subtext: "last 3 months" },
-  { value: "6m", label: "6 Months", subtext: "last 6 months" },
-  { value: "year", label: "Year", subtext: "last year" },
-  { value: "5y", label: "5 Years", subtext: "last 5 years" },
+  { value: "day", labelKey: "analytics.periodDay", subtextKey: "analytics.subtextDay" },
+  { value: "week", labelKey: "analytics.periodWeek", subtextKey: "analytics.subtextWeek" },
+  { value: "month", labelKey: "analytics.periodMonth", subtextKey: "analytics.subtextMonth" },
+  { value: "3m", labelKey: "analytics.period3m", subtextKey: "analytics.subtext3m" },
+  { value: "6m", labelKey: "analytics.period6m", subtextKey: "analytics.subtext6m" },
+  { value: "year", labelKey: "analytics.periodYear", subtextKey: "analytics.subtextYear" },
+  { value: "5y", labelKey: "analytics.period5y", subtextKey: "analytics.subtext5y" },
 ];
 
 const Analytics = () => {
+  const { t } = useTranslation();
   const { displayCurrency, displayRate } = useCurrency();
   const [year, setYear] = useState(new Date().getFullYear());
   const [summary, setSummary] = useState(null);
@@ -58,22 +60,23 @@ const Analytics = () => {
       .catch((error) => console.log(error));
   }, [year]);
 
-  const periodSubtext =
-    PERIOD_OPTIONS.find((o) => o.value === period)?.subtext || "";
+  const periodSubtextKey = PERIOD_OPTIONS.find((o) => o.value === period)
+    ?.subtextKey;
+  const periodSubtext = periodSubtextKey ? t(periodSubtextKey) : "";
   const savingsRate = periodData?.savings_rate;
 
   return (
     <>
       <div className="flex flex-col gap-1">
-        <h1>Analytics</h1>
+        <h1>{t("analytics.title")}</h1>
         <p className="text-gray-500 dark:text-gray-400">
-          Track your income, spending, and net worth over time.
+          {t("analytics.subtitle")}
         </p>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Overview
+          {t("analytics.overview")}
         </h2>
         <ChartSelect
           value={period}
@@ -81,7 +84,7 @@ const Analytics = () => {
         >
           {PERIOD_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
-              {o.label}
+              {t(o.labelKey)}
             </option>
           ))}
         </ChartSelect>
@@ -90,21 +93,21 @@ const Analytics = () => {
       <div className="grid grid-cols-1 gap-4 py-6 sm:grid-cols-3">
         <StatCard
           icon={faArrowUp}
-          label="Income"
+          label={t("analytics.income")}
           value={formatWhole(periodData?.income, displayCurrency, displayRate)}
           subtext={periodSubtext}
           tone="positive"
         />
         <StatCard
           icon={faArrowDown}
-          label="Expenses"
+          label={t("analytics.expenses")}
           value={formatWhole(periodData?.expense, displayCurrency, displayRate)}
           subtext={periodSubtext}
           tone="negative"
         />
         <StatCard
           icon={faPiggyBank}
-          label="Savings rate"
+          label={t("analytics.savingsRate")}
           value={
             savingsRate === null || savingsRate === undefined
               ? "—"
@@ -114,7 +117,7 @@ const Analytics = () => {
         />
       </div>
 
-      <div className="flex flex-col gap-6 pb-6 w-full max-w-5xl">
+      <div className="flex flex-col gap-6 pb-6 w-full">
         <Card>
           <ChartErrorBoundary>
             <NetWorthChange
@@ -150,25 +153,25 @@ const Analytics = () => {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <ChartErrorBoundary>
-              <Chart type="expense" title="Expenses this year" />
+              <Chart type="expense" title={t("dashboard.expensesThisYear")} />
             </ChartErrorBoundary>
           </Card>
           <Card>
             <ChartErrorBoundary>
-              <Chart type="income" title="Income this year" />
+              <Chart type="income" title={t("dashboard.incomeThisYear")} />
             </ChartErrorBoundary>
           </Card>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
-            <ChartHeader title="Expenses by category" />
+            <ChartHeader title={t("analytics.expensesByCategory")} />
             <ChartErrorBoundary>
               <PieChart type="expense" />
             </ChartErrorBoundary>
           </Card>
           <Card>
-            <ChartHeader title="Income by category" />
+            <ChartHeader title={t("analytics.incomeByCategory")} />
             <ChartErrorBoundary>
               <PieChart type="income" />
             </ChartErrorBoundary>

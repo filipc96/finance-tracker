@@ -11,21 +11,22 @@ import { buildLineOptions, CHART_COLORS, withAlpha } from "../utils/chartTheme";
 import { formatWhole } from "../utils/formatCurrency";
 import StatCard from "./StatCard";
 import ChartHeader from "./ui/ChartHeader";
+import { useTranslation } from "react-i18next";
 
 // How much net worth rose (or fell) over the selected period, split into the
 // three sources the user tracks: cash balance, savings, and stocks. `change`
 // is the `net_worth_change` object from /api/analytics/period-summary/.
 const NetWorthChange = ({ change, periodLabel }) => {
+  const { t } = useTranslation();
   const { darkMode } = useTheme();
   const { displayCurrency, displayRate } = useCurrency();
 
   if (!change || !change.available) {
     return (
       <>
-        <ChartHeader title="Net worth change" />
+        <ChartHeader title={t("netWorthChange.title")} />
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          No snapshots yet — net worth change accrues from your first app load
-          each day.
+          {t("netWorthChange.noSnapshots")}
         </p>
       </>
     );
@@ -40,14 +41,18 @@ const NetWorthChange = ({ change, periodLabel }) => {
   const tone = (v) => (Number(v) >= 0 ? "positive" : "negative");
 
   const subtext = change.since_first_record
-    ? "since first record"
+    ? t("netWorthChange.sinceFirstRecord")
     : periodLabel;
 
   const data = {
-    labels: ["Balance", "Savings", "Stocks"],
+    labels: [
+      t("netWorthChange.balance"),
+      t("netWorthChange.savings"),
+      t("netWorthChange.stocks"),
+    ],
     datasets: [
       {
-        label: "Change",
+        label: t("netWorthChange.change"),
         data: [change.balance, change.savings, change.stocks],
         backgroundColor: [
           withAlpha(CHART_COLORS.balance, 0.85),
@@ -69,34 +74,34 @@ const NetWorthChange = ({ change, periodLabel }) => {
   return (
     <>
       <ChartHeader
-        title="Net worth change"
-        subtitle={`How much your net worth moved ${subtext}.`}
+        title={t("netWorthChange.title")}
+        subtitle={t("netWorthChange.subtitle", { period: subtext })}
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={faScaleBalanced}
-          label="Total change"
+          label={t("netWorthChange.totalChange")}
           value={signed(change.total)}
           subtext={subtext}
           tone={tone(change.total)}
         />
         <StatCard
           icon={faWallet}
-          label="Balance"
+          label={t("netWorthChange.balance")}
           value={signed(change.balance)}
           subtext={subtext}
           tone={tone(change.balance)}
         />
         <StatCard
           icon={faPiggyBank}
-          label="Savings"
+          label={t("netWorthChange.savings")}
           value={signed(change.savings)}
           subtext={subtext}
           tone={tone(change.savings)}
         />
         <StatCard
           icon={faChartLine}
-          label="Stocks"
+          label={t("netWorthChange.stocks")}
           value={signed(change.stocks)}
           subtext={subtext}
           tone={tone(change.stocks)}

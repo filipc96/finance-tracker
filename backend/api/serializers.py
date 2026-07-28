@@ -103,6 +103,7 @@ class SettingsSerializer(serializers.ModelSerializer):
             "dark_mode",
             "base_currency",
             "display_currency",
+            "language",
             "open_ai_api_key",
             "anthropic_api_key",
             "ollama_base_url",
