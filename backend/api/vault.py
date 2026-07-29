@@ -108,6 +108,16 @@ def _idle_timeout() -> float:
     return float(getattr(dj_settings, "VAULT_IDLE_TIMEOUT_SECONDS", _DEFAULT_IDLE_TIMEOUT))
 
 
+def idle_timeout_seconds() -> float:
+    """Public: the idle window (seconds) before an unlocked DEK is dropped.
+
+    0 or less means idle re-locking is disabled. Exposed so the desktop client
+    can size its own inactivity check to match the server and redirect to the
+    account picker the moment the vault re-locks.
+    """
+    return _idle_timeout()
+
+
 def _still_unlocked(user_id: int, now: float) -> bool:
     """Drop the DEK if idle past the timeout. Caller must hold ``_LOCK``.
 

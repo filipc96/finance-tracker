@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import api from "../api";
 import { ACCESS_TOKEN } from "../constants";
+import useVaultLockGuard from "../hooks/useVaultLockGuard";
 import {
   faBars,
   faXmark,
@@ -21,6 +22,12 @@ const SharedLayout = ({ menuItems }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 726);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Redirect to the account picker if the vault re-locks while idle/backgrounded
+  // (desktop only). Mounted here because SharedLayout is the persistent
+  // authenticated shell — it survives page navigation, so the guard runs for the
+  // whole session rather than resetting on every route change.
+  useVaultLockGuard();
 
   useEffect(() => {
     // Materialize due recurring transactions once per app load

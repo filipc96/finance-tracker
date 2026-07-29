@@ -41,8 +41,35 @@ const refreshAccessToken = async () => {
   return res.data.access;
 };
 
+// Vault idle-guard signal. Every authenticated response also refreshes the
+// server's vault idle clock (see backend api/auth.py -> get_dek), so the client
+// guard subscribes here to keep its own inactivity timer in lockstep — it fires
+// exactly when the server would re-lock, never on a still-live session.
+const activitySubscribers = new Set();
+
+export function onApiActivity(cb) {
+  activitySubscribers.add(cb);
+  return () => activitySubscribers.delete(cb);
+}
+
+const notifyApiActivity = () => {
+  for (const cb of activitySubscribers) {
+    try {
+      cb();
+    } catch {
+      // A subscriber must never break response delivery.
+    }
+  }
+};
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Only count authenticated traffic; anonymous calls don't touch the vault.
+    if (response.config?.headers?.Authorization) {
+      notifyApiActivity();
+    }
+    return response;
+  },
   async (error) => {
     const original = error.config;
     const status = error.response?.status;

@@ -180,7 +180,14 @@ class VaultStateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"unlocked": vault.is_unlocked(request.user.id)})
+        return Response(
+            {
+                "unlocked": vault.is_unlocked(request.user.id),
+                # Idle window (seconds) so the desktop client can size its own
+                # inactivity check to match and redirect on re-lock.
+                "idle_timeout": vault.idle_timeout_seconds(),
+            }
+        )
 
 
 class VaultRecoverView(APIView):
