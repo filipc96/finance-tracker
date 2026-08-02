@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { faTerminal } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import api from "../api";
 import { formatMoney } from "../utils/formatCurrency";
 
@@ -13,7 +11,7 @@ const HELP_LINES = [
   "                                              Add a transaction",
 ];
 
-const Terminal = ({ isOpen, setIsOpen }) => {
+const Terminal = ({ isOpen }) => {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [history, setHistory] = useState([]);

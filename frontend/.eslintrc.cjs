@@ -16,5 +16,9 @@ module.exports = {
       'warn',
       { allowConstantExport: true },
     ],
+    // This is a plain-JS app that has never used runtime prop validation, so
+    // plugin:react/recommended's prop-types rule is pure noise here (169 hits).
+    // Revisit if the codebase ever moves to TypeScript.
+    'react/prop-types': 'off',
   },
 }

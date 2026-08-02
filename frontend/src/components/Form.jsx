@@ -5,7 +5,7 @@ import api from "../api";
 import { useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../constants";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUser, faLock, faWallet } from "@fortawesome/free-solid-svg-icons";
+import { faUser, faWallet } from "@fortawesome/free-solid-svg-icons";
 import Button from "./ui/Button";
 import PasswordInput from "./ui/PasswordInput";
 import RecoveryKeyPanel from "./RecoveryKeyPanel";
