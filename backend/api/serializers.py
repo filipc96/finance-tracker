@@ -82,6 +82,8 @@ class UserSerializer(serializers.ModelSerializer):
         if getattr(django_settings, "DESKTOP_MODE", False):
             user.recovery_key = vault.create_vault(user, password)
         return user
+
+
 class SettingsSerializer(serializers.ModelSerializer):
     # Secrets are write-only — never echoed back to the client. The client
     # instead reads the has_* booleans below to know whether a key is set.

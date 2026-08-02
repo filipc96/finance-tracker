@@ -66,3 +66,16 @@ cd backend
 Configure the token / user ID / enabled flag in the Settings page first.
 Toggling **Enable Telegram bot** off stops responses within ~15s with no
 restart.
+
+## License
+
+**Proprietary — all rights reserved.** This is not open-source software. No
+right to use, copy, modify, or redistribute the source is granted; see
+[LICENSE](LICENSE) for the full terms and for licensing enquiries.
+
+Bundled third-party dependencies (Django, React, Tauri, and others) remain under
+their own permissive licenses, listed in Section 5 of `LICENSE`.
+
+> Versions before this change were distributed under the GNU GPL v3. That
+> license continues to apply only to those earlier snapshots; every release from
+> here on is proprietary.
