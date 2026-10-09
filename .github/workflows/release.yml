@@ -205,13 +205,8 @@ jobs:
         shell: pwsh
         if: github.event.inputs.verify_before_push != 'true'
         run: |
-          $tag = "v$env:APP_VERSION"
-          $existing = $null
-          try { $existing = gh release view $tag --json tagName -q .tagName 2>&1 } catch { }
-          if ($existing -and $existing -ne "") {
-            Write-Host "::warning ::release $tag already exists — refusing to overwrite"
-            exit 0
-          }
+          # Create draft release (force-replace in case of orphan)
+          gh release delete $tag --yes 2>/dev/null || true
           gh release create $tag --title $tag --draft --generate-notes --target $env:GITHUB_SHA
           gh release upload $tag "$env:INSTALLER_PATH" --clobber
           $shaFile = Join-Path (Split-Path $env:INSTALLER_PATH) "SHA256SUMS.txt"
