@@ -158,7 +158,7 @@ jobs:
               Write-Host "::error ::frontend root did not return HTML (status $($html.StatusCode))"
               exit 1
             }
-            Write-Host "Frontend root HTML: status $($html.StatusCode), $($html.Headers.'Content-Length' // 'unknown') bytes"
+            Write-Host "Frontend root HTML: status $($html.StatusCode), content-length $($html.Headers.'Content-Length' ?? 'unknown') bytes"
           } catch {
             Write-Host "::error ::frontend root unreachable: $_"
             exit 1
