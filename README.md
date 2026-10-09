@@ -1,81 +1,130 @@
-# finance-tracker
+# Fintrax
 
-Fintrax — a local-first personal finance desktop app (Tauri shell + Django
-sidecar + React UI).
+**Local-first personal finance desktop app.**  
+A Tauri 2 shell wrapping a Django/React app with an encrypted vault, AI assistant
+(bring-your-own-key), Trading 212 sync, Telegram remote control — and zero cloud
+subscriptions.
 
-## Telegram remote access
+![Fintrax dashboard](docs/screenshots/01-dashboard.png)
 
-You can drive the app from your phone by messaging a Telegram bot — add
-transactions and check your balance while away from the PC, the same way the
-in-app Terminal works. The bot runs **inside the app** and reaches Telegram over
-**outbound** long-polling, so it needs no port forwarding, public URL, tunnel,
-or certificate and works behind home NAT unchanged. It only responds while the
-desktop app is running.
+## Features
 
-### Setup
+- **🔐 Encrypted vault** — master-password-protected envelope encryption for
+  your API keys (OpenAI, Anthropic, Trading 212). Only you have the key.
+- **📊 Complete ledger** — transactions, categories, budgets, recurring bills,
+  savings accounts with interest accrual, multi-currency support (20 currencies).
+- **📈 Analytics** — income/expense charts, category breakdowns, savings rate,
+  net-worth tracking over time.
+- **🤖 AI assistant** — ask questions about your finances in natural language.
+  Bring your own API key (OpenAI, Anthropic, Ollama, LM Studio) or run fully
+  offline.
+- **📸 Receipt OCR** — snap a receipt with your phone camera; the app reads the
+  total, merchant, and date and creates an expense draft.
+- **📱 Telegram remote access** — check balances and add transactions from your
+  phone. The bot connects over outbound-only long polling — no port forwarding
+  or public URL needed.
+- **📈 Trading 212 sync** — pull your portfolio automatically, FX-converted to
+  your base currency.
+- **💾 Local-first** — your data lives in a per-user SQLite database on your
+  machine. No account sign-up, no cloud backend.
 
-1. In Telegram, message **@BotFather** → `/newbot` → copy the **bot token**.
-2. Message **@userinfobot** → copy your **numeric user ID**.
-3. In the app: **Settings → Telegram / Remote access** → paste both, flip
-   **Enable Telegram bot** on, and **Save**. It takes effect within ~15s — no
-   restart needed.
-4. Message your bot `help` to see the commands.
+## Download
 
-### Commands (add + read only)
+**No published binaries yet.** Releases will appear on the
+[Releases](https://github.com/filipc96/finance-tracker/releases) page once the
+first build is cut. See [BUILDING](#building-from-source) below to build
+from source.
 
-```
-help
-add <expense|income> <category> <amount> [description]
-balance
-recent [n]         # last n transactions (default 5, max 20)
-categories
-```
+*⚠ The Windows installer will be unsigned — SmartScreen may show a warning.*
+*Code signing may be added in a future release.*
 
-Multi-word categories work (`add expense Dining Out 20`); amounts use your
-account's base currency.
+- **Windows:** NSIS installer (.exe)
+- **macOS / Linux:** not yet packaged (PRs welcome)
 
-### Security notes
+## Screenshots
 
-- **Allowlist is the only gate.** The bot obeys exactly one Telegram user ID
-  (the one you configured). `from.id` is set by Telegram, not by message text,
-  so it can't be spoofed. Messages from anyone else are silently ignored.
-- **The bot token is stored in plaintext** in the local database (not vault-
-  encrypted). This is deliberate: the poller starts headless at app launch,
-  before any vault unlock, so it must read the token without the master
-  password. Encrypting it with a key that sits next to the database would add no
-  real protection. The token grants control of *the bot* (add/read only), never
-  the vault — and the DB already lives in your per-user profile directory. This
-  is the standard tradeoff for any always-on bot; treat the token like any
-  credential and revoke it via @BotFather if leaked.
-- **Replies traverse Telegram's servers** (cloud chats aren't end-to-end
-  encrypted), so replies are kept terse — no full statement dumps.
-- **No remote destructive operations** (no delete/edit) and **no remote vault
-  unlock** — your master password never touches Telegram.
+| Dashboard | Analytics | AI Chat |
+|-----------|-----------|---------|
+| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Analytics](docs/screenshots/02-analytics.png) | ![AI Chat](docs/screenshots/03-ai-chat.png) |
 
-### Development
+| Budgets | Receipt scan | Savings |
+|---------|-------------|---------|
+| ![Budgets](docs/screenshots/06-budgets.png) | ![Receipt scan](docs/screenshots/04-receipt-scan.png) | ![Savings](docs/screenshots/08-savings.png) |
 
-The bot also runs as a foreground management command against the dev database,
-so you can test it with `runserver` instead of building the packaged app:
+> Screenshots were captured from a demo account with synthetic data. The receipt
+> and AI chat responses used real app pipelines but staged test data — see
+> [docs/screenshots/README.md](docs/screenshots/README.md) for details.
+
+## Building from source
+
+### Prerequisites
+
+- **Node.js** 24+ & npm
+- **Python** 3.13+ & pip (venv recommended)
+- **Rust** & Cargo (latest stable)
+- **Tauri CLI 2:** `npm install -g @tauri-apps/cli` or
+  `cargo install tauri-cli --version "^2" --locked`
+
+### Backend
 
 ```bash
 cd backend
-.venv/Scripts/python manage.py runserver          # in one shell
-.venv/Scripts/python manage.py telegram_bot       # in another (foreground poller)
+python -m venv .venv
+source .venv/bin/activate          # Linux
+# .venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
 ```
 
-Configure the token / user ID / enabled flag in the Settings page first.
-Toggling **Enable Telegram bot** off stops responses within ~15s with no
-restart.
+### Frontend (development)
+
+```bash
+cd frontend
+npm install
+npm run dev          # starts Vite on :5173
+```
+
+The API runs on :8000, the Vite dev server on :5173. Open the Vite URL in your
+browser — the API calls are proxied.
+
+### Desktop build (Windows)
+
+```powershell
+pwsh desktop/build.ps1
+```
+
+See [desktop/build.md](desktop/build.md) for the full architecture and
+iteration workflow. The script builds the React SPA, packages the Django
+sidecar with PyInstaller, and produces an NSIS installer via Tauri.
+
+## Quick start
+
+1. Start the app → **Create an account** → set your base currency
+2. Choose a strong master password (this is also your vault key)
+3. **Save your recovery key** — the app shows it once on registration
+4. Add transactions, set budgets, connect your AI provider or Trading 212
+   account in Settings
+
+> ⚠ This is beta-quality software. Back up your database regularly
+> (`%APPDATA%\com.fintrax.app\db.sqlite3` on Windows).
+
+## Documentation
+
+- [Telegram remote setup & security](docs/telegram-remote.md)
+- [Security & privacy](docs/security-privacy.md)
+- [Build & release process](RELEASING.md)
+- [Desktop architecture](desktop/build.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-**Proprietary — all rights reserved.** This is not open-source software. No
-right to use, copy, modify, or redistribute the source is granted; see
-[LICENSE](LICENSE) for the full terms and for licensing enquiries.
+**MIT** — see [LICENSE](LICENSE). Bundled third-party dependencies (Django,
+DRF, React, Tauri, and others) remain under their own permissive licenses.
 
-Bundled third-party dependencies (Django, React, Tauri, and others) remain under
-their own permissive licenses, listed in Section 5 of `LICENSE`.
-
-> Versions before this change were distributed under the GNU GPL v3. That
-> license continues to apply only to those earlier snapshots; every release from
-> here on is proprietary.
+> Earlier snapshots of this repository were distributed under a proprietary
+> license. Those versions are not affected by this change: the MIT license
+> applies only from the point of this transition forward.

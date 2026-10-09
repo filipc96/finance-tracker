@@ -1,0 +1,220 @@
+name: Release (Windows desktop build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify_before_push:
+        description: 'Dry-run only — do not push or create release'
+        type: boolean
+        default: false
+        required: false
+
+# One release job with contents:write for gh release; all other steps are read-only.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build NSIS installer (Windows x64)
+    runs-on: windows-2022
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $config = Get-Content src-tauri\tauri.conf.json | ConvertFrom-Json
+          $version = $config.version
+          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+          echo "App version from tauri.conf.json: $version"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+            Write-Host "::error ::tag mismatch: $env:GITHUB_REF_NAME ≠ v$version"
+            exit 1
+          }
+
+      - name: Prevent publishing from master without version tag
+        shell: pwsh
+        run: |
+          $dryRun = "${{ github.event.inputs.verify_before_push }}" -eq "true"
+          if ($dryRun) {
+            Write-Host "Dry-run mode — no release will be created"
+          }
+
+      # ── Frontend ──
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
+
+      # ── Backend sidecar ──
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/requirements-desktop.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv\Scripts\pip install -r requirements-desktop.txt
+
+      - name: Sync SPA into Tauri UI dir
+        shell: pwsh
+        run: |
+          robocopy frontend\dist src-tauri\ui /MIR /NFL /NDL /NJH /NJS /NP
+          if ($LASTEXITCODE -ge 8) { throw "robocopy failed: $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+
+      - name: PyInstaller sidecar
+        working-directory: backend
+        run: .venv\Scripts\pyinstaller fintrax-server.spec --noconfirm
+
+      # ── Tauri build (createUpdaterArtifacts disabled — no signing key) ──
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri CLI (npm, faster)
+        run: npm install -g @tauri-apps/cli@2
+
+      - name: Stage sidecar binary
+        shell: pwsh
+        run: |
+          $triple = (rustc --print host-tuple).Trim()
+          $binDir = "src-tauri\binaries"
+          New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+          Copy-Item backend\dist\fintrax-server.exe "$binDir\fintrax-server-$triple.exe" -Force
+
+      - name: Build Tauri app (createUpdaterArtifacts=false)
+        shell: pwsh
+        run: |
+          # Override updater artifacts setting via env — Tauri 2 reads env vars
+          # prefixed with TAURI_* that match config keys
+          $config = Get-Content src-tauri\tauri.conf.json | ConvertFrom-Json
+          $config.bundle.createUpdaterArtifacts = $false
+          $config | ConvertTo-Json -Compress | Set-Content src-tauri\tauri.conf.json -Encoding UTF8
+          cd src-tauri
+          cargo tauri build
+        env:
+          # Also pass via env as a safety net
+          TAURI_BUNDLE_CREATE_UPDATER_ARTIFACTS: false
+
+      - name: Smoke-test the sidecar
+        shell: pwsh
+        run: |
+          $sidecar = Get-ChildItem backend\dist\fintrax-server.exe
+          Write-Host "Sidecar: $($sidecar.Name) $($sidecar.Length) bytes"
+
+          $port = 18765
+          $dataDir = Join-Path $env:RUNNER_TEMP "fintrax-smoke-$port"
+          New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+
+          $proc = Start-Process -FilePath $sidecar.FullName -ArgumentList "--port","$port","--data-dir","$dataDir" -NoNewWindow -RedirectStandardOutput "$dataDir\server.log" -RedirectStandardError "$dataDir\server-err.log" -PassThru
+          Write-Host "Sidecar PID: $($proc.Pid)"
+
+          # Wait for /health/ (up to 30 seconds)
+          $healthy = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try {
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/health/" -TimeoutSec 3 -SkipCertificateCheck
+              if ($r.StatusCode -eq 200) { $healthy = $true; break }
+            } catch { }
+            Sleep 1
+          }
+          if (-not $healthy) {
+            Write-Host "::error ::sidecar health check failed"
+            Get-Content "$dataDir\server.log" | Write-Host
+            Get-Content "$dataDir\server-err.log" | Write-Host
+            exit 1
+          }
+          Write-Host "Health OK"
+
+          # Verify frontend root returns HTML
+          try {
+            $html = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 5 -SkipCertificateCheck
+            if ($html.StatusCode -ne 200 -or (-not ($html.Content -match "<title") -and -not ($html.Content -match "<!DOCTYPE"))) {
+              Write-Host "::error ::frontend root did not return HTML (status $($html.StatusCode))"
+              exit 1
+            }
+            Write-Host "Frontend root HTML: status $($html.StatusCode), $($html.Headers.'Content-Length' // 'unknown') bytes"
+          } catch {
+            Write-Host "::error ::frontend root unreachable: $_"
+            exit 1
+          }
+
+          # Verify DB was created
+          $db = Join-Path $dataDir "db.sqlite3"
+          if (-not (Test-Path $db)) {
+            Write-Host "::error ::database not created"
+            exit 1
+          }
+          Write-Host "Database created at $db"
+
+          # Clean shutdown
+          Stop-Process -Force -Id $proc.Pid
+          Write-Host "Sidecar smoke test PASSED"
+
+      # ── Package installer ──
+      - name: Gather installer
+        shell: pwsh
+        run: |
+          $nsisDir = "src-tauri\target\release\bundle\nsis"
+          $installers = Get-ChildItem $nsisDir -Filter *.exe
+          if ($installers.Count -eq 0) { throw "No NSIS installer found" }
+          $installer = $installers[0]
+          Write-Host "Installer: $($installer.Name) $($installer.Length) bytes"
+          echo "INSTALLER_PATH=$($installer.FullName)" >> $env:GITHUB_ENV
+          echo "INSTALLER_NAME=$($installer.Name)" >> $env:GITHUB_ENV
+
+          # SHA256
+          $hash = (CertUtil -hashfile $installer.FullName SHA256)[1] -replace '\s+',' '
+          $hash | Set-Content "$($installer.Directory)\SHA256SUMS.txt"
+          Write-Host "SHA256: $hash"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fintrax-Windows-${{ env.APP_VERSION }}
+          path: src-tauri/target/release/bundle/nsis/
+          retention-days: 30
+
+      # ── Draft release ──
+      - name: Create draft release
+        shell: pwsh
+        if: github.event.inputs.verify_before_push != 'true'
+        run: |
+          $tag = "v$env:APP_VERSION"
+          $existing = $null
+          try { $existing = gh release view $tag --json tagName -q .tagName 2>&1 } catch { }
+          if ($existing -and $existing -ne "") {
+            Write-Host "::warning ::release $tag already exists — refusing to overwrite"
+            exit 0
+          }
+          gh release create $tag --title $tag --draft --generate-notes --target $env:GITHUB_SHA
+          gh release upload $tag "$env:INSTALLER_PATH" --clobber
+          $shaFile = Join-Path (Split-Path $env:INSTALLER_PATH) "SHA256SUMS.txt"
+          if (Test-Path $shaFile) { gh release upload $tag $shaFile --clobber }
+          Write-Host "Draft release $tag created"

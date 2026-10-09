@@ -77,8 +77,14 @@ This runs the pipeline below and prints the installer path. Flags:
   `/health/` poll. Switch to onedir + Tauri `resources` later if it annoys.
 - **Unsigned** exe + installer → Windows SmartScreen may warn. Code signing is
   out of scope.
-- **Secrets** (OpenAI/Anthropic/T212 keys) are stored plaintext in the per-user
-  SQLite DB, same as the web app — a standing follow-up.
+- **Secrets** (OpenAI/Anthropic/T212 API keys) are vault-encrypted when the
+  vault is locked, per the `vault.py` envelope-encryption design. They are
+  decrypted in process memory while the vault is unlocked and the app is
+  running. This is a deliberate trade-off: the sidecar poller needs access to
+  the Telegram token at boot, before any vault unlock, so that one value is
+  stored alongside the database (see the Telegram-access security notes in
+  the README for the reasoning). The `desktop.py` launcher and the embedded
+  waitress server enforce a per-user data directory (`FINTRAX_DATA_DIR`).
 - **`.spec` and `binaries/*.exe` are build artifacts.** The `.spec` is committed
   (force-added past the Python gitignore); the sidecar exe and `frontend/dist`
   are regenerated and git-ignored.
