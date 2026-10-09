@@ -173,7 +173,7 @@ jobs:
           Write-Host "Database created at $db"
 
           # Clean shutdown
-          Stop-Process -Force -Id $proc.Pid
+          if ($proc.Pid) { Stop-Process -Force -Id $proc.Pid }
           Write-Host "Sidecar smoke test PASSED"
 
       # ── Package installer ──
