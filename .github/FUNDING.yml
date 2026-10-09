@@ -1,0 +1,9 @@
+# Donation links for Fintrax
+# GitHub reads this file and shows the links on the repo sidebar.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button
+
+# Replace these with your actual donation page URLs.
+# Ko-fi: https://ko-fi.com/<your-username>
+# Buy Me a Coffee: https://www.buymeacoffee.com/<your-username>
+custom:
+  - https://ko-fi.com/filipc96
