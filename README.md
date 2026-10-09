@@ -124,7 +124,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **MIT** — see [LICENSE](LICENSE). Bundled third-party dependencies (Django,
 DRF, React, Tauri, and others) remain under their own permissive licenses.
-
-> Earlier snapshots of this repository were distributed under a proprietary
-> license. Those versions are not affected by this change: the MIT license
-> applies only from the point of this transition forward.
