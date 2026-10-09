@@ -206,6 +206,7 @@ jobs:
         if: github.event.inputs.verify_before_push != 'true'
         run: |
           # Create draft release (force-replace in case of orphan)
+          $tag = "v$env:APP_VERSION"
           gh release delete $tag --yes 2>$null || true
           gh release create $tag --title $tag --draft --generate-notes --target $env:GITHUB_SHA
           gh release upload $tag "$env:INSTALLER_PATH" --clobber
