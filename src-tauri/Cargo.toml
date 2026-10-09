@@ -1,12 +1,11 @@
 [package]
 name = "fintrax"
 version = "1.0.0"
-description = "Fintrax personal finance tracker"
-authors = ["Fintrax"]
+description = "Local-first personal finance desktop app"
+authors = ["Filip Cvijetinović"]
 edition = "2021"
 rust-version = "1.77.2"
-# Proprietary; "license" takes an SPDX id, so point at the file instead.
-license-file = "../LICENSE"
+license = "MIT"
 publish = false
 
 [lib]
