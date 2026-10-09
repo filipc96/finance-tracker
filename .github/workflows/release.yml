@@ -111,15 +111,14 @@ jobs:
       - name: Build Tauri app (createUpdaterArtifacts=false)
         shell: pwsh
         run: |
-          # Override updater artifacts setting via env — Tauri 2 reads env vars
-          # prefixed with TAURI_* that match config keys
-          $config = Get-Content src-tauri\tauri.conf.json | ConvertFrom-Json
-          $config.bundle.createUpdaterArtifacts = $false
-          $config | ConvertTo-Json -Compress | Set-Content src-tauri\tauri.conf.json -Encoding UTF8
+          # Temporarily disable updater artifacts (no signing key available in CI)
+          $json = Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json
+          $json.bundle.createUpdaterArtifacts = $false
+          # Write back with depth to prevent truncation
+          $json | ConvertTo-Json -Compress -Depth 10 | Set-Content src-tauri\tauri.conf.json -Encoding UTF8 -Force
           cd src-tauri
-          cargo tauri build
+          npx tauri build
         env:
-          # Also pass via env as a safety net
           TAURI_BUNDLE_CREATE_UPDATER_ARTIFACTS: false
 
       - name: Smoke-test the sidecar
